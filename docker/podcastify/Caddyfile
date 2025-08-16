@@ -1,0 +1,15 @@
+:{$PORT} {
+  root * /app/public
+  encode gzip
+  header Access-Control-Allow-Origin "*"
+
+  file_server {
+    browse
+    hide .gitkeep
+  }
+
+  log {
+    output stdout
+    format console
+  }
+}

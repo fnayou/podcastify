@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+venv/
+
+# Env & logs
+.env
+.env.*
+!.env.example
+*.log
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+
+# Docker artifacts (optional)
+docker-data/
+
+# Keep folders, ignore their contents
+podcasts/*
+!podcasts/.gitkeep
+
+public/*
+!public/.gitkeep

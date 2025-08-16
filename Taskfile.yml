@@ -1,0 +1,415 @@
+version: "3"
+
+dotenv: [".env", ".env.local"]
+
+vars:
+  COMPOSE: docker compose
+  SERVICE_NAME: podcastify
+  APP_SCRIPT: /app/app.py
+  PUBLIC_DIR: ./public
+  PODCASTS_DIR: ./podcasts
+  LOG_LINES: 200
+
+includes:
+  dev:
+    taskfile: ./Taskfile.dev.yml
+    optional: true
+
+tasks:
+  default:
+    desc: "Show all available tasks with descriptions"
+    silent: true
+    cmds:
+      - |
+        echo "🎙️  Podcast RSS Generator - Available Tasks"
+        echo "=========================================="
+        task --list
+        echo
+        echo "💡 Use 'task <command>' to run tasks"
+
+  info:
+    desc: "Show system and project information"
+    silent: true
+    cmds:
+      - |
+        echo "📊 System Information"
+        echo "===================="
+        echo 'Docker Compose: {{ .COMPOSE }}'
+        echo 'Service Name: {{ .SERVICE_NAME }}'
+        echo 'Public Directory: {{ .PUBLIC_DIR }}'
+        echo 'Podcasts Directory: {{ .PODCASTS_DIR }}'
+        echo
+        echo "📁 Directory Status:"
+        if [ -d '{{.PUBLIC_DIR}}' ]; then echo "Public dir exists: ✅"; else echo "Public dir exists: ❌"; fi
+        if [ -d '{{.PODCASTS_DIR}}' ]; then echo "Podcasts dir exists: ✅"; else echo "Podcasts dir exists: ❌"; fi
+        echo
+        echo "🐳 Docker Status:"
+        {{.COMPOSE}} ps {{.SERVICE_NAME}} 2>/dev/null || echo "❌ Service not running"
+
+  # ---------------------------------------------------------------------------
+  # Docker lifecycle
+  # ---------------------------------------------------------------------------
+
+  up:
+    desc: "🚀 Build and start the podcast generator service"
+    silent: true
+    cmds:
+      - 'echo "🏗️  Building and starting {{.SERVICE_NAME}} service..."'
+      - "{{.COMPOSE}} up -d --build"
+      - 'echo "✅ Service started successfully!"'
+      - task: status
+
+  down:
+    desc: "🛑 Stop and remove containers"
+    silent: true
+    cmds:
+      - 'echo "🛑 Stopping {{.SERVICE_NAME}} service..."'
+      - "{{.COMPOSE}} down"
+      - 'echo "✅ Service stopped successfully!"'
+
+  restart:
+    desc: "🔄 Restart the service with rebuild"
+    silent: true
+    cmds:
+      - 'echo "🔄 Restarting {{.SERVICE_NAME}} service..."'
+      - task: down
+      - task: up
+
+  status:
+    desc: "📊 Show service status and health"
+    silent: true
+    cmds:
+      - |
+        echo "📊 Service Status:"
+        {{.COMPOSE}} ps {{.SERVICE_NAME}}
+        echo
+        echo "💾 Recent logs (last 10 lines):"
+        {{.COMPOSE}} logs --tail=10 {{.SERVICE_NAME}} 2>/dev/null || echo "No logs available"
+
+  # ---------------------------------------------------------------------------
+  # Logs & debugging
+  # ---------------------------------------------------------------------------
+
+  logs:
+    desc: "📋 Follow service logs in real-time"
+    silent: true
+    interactive: true
+    cmds:
+      - 'echo "📋 Following logs for {{.SERVICE_NAME}} (Ctrl+C to stop)..."'
+      - "{{.COMPOSE}} logs -f --tail={{.LOG_LINES}} {{.SERVICE_NAME}} {{.CLI_ARGS}}"
+
+  logs:recent:
+    desc: "📋 Show recent logs without following"
+    silent: true
+    cmds:
+      - "{{.COMPOSE}} logs --tail={{.LOG_LINES}} {{.SERVICE_NAME}} {{.CLI_ARGS}}"
+
+  logs:errors:
+    desc: "🚨 Show only error/warn/fail logs (full lines)"
+    silent: true
+    cmds:
+      - |
+        {{.COMPOSE}} logs {{.SERVICE_NAME}} | grep -Ei "error|warn|fail|traceback" || echo "No errors found in logs"
+
+  shell:
+    desc: "🐚 Open interactive shell in running container"
+    silent: true
+    interactive: true
+    preconditions:
+      - sh: 'test -n "$({{.COMPOSE}} ps -q {{.SERVICE_NAME}})"'
+        msg: "Service {{.SERVICE_NAME}} is not running. Use 'task up' first."
+    cmds:
+      - 'echo "🐚 Opening shell in {{.SERVICE_NAME}} container..."'
+      - "{{.COMPOSE}} exec {{.SERVICE_NAME}} sh"
+
+  shell:root:
+    desc: "🔧 Open root shell in running container (for debugging)"
+    silent: true
+    interactive: true
+    preconditions:
+      - sh: 'test -n "$({{.COMPOSE}} ps -q {{.SERVICE_NAME}})"'
+        msg: "Service {{.SERVICE_NAME}} is not running. Use 'task up' first."
+    cmds:
+      - 'echo "🔧 Opening root shell in {{.SERVICE_NAME}} container..."'
+      - "{{.COMPOSE}} exec --user root {{.SERVICE_NAME}} sh"
+
+  inspect:
+    desc: "🔍 Show container configuration and environment"
+    silent: true
+    preconditions:
+      - sh: 'test -n "$({{.COMPOSE}} ps -q {{.SERVICE_NAME}})"'
+        msg: "Service {{.SERVICE_NAME}} is not running. Use 'task up' first."
+    cmds:
+      - |
+        echo "🔍 Container Environment:"
+        {{.COMPOSE}} exec {{.SERVICE_NAME}} env | sort
+        echo
+        echo "🔍 Container Processes:"
+        {{.COMPOSE}} exec {{.SERVICE_NAME}} ps aux
+
+  # ---------------------------------------------------------------------------
+  # Build & images
+  # ---------------------------------------------------------------------------
+
+  build:
+    desc: "🏗️  Rebuild image without cache"
+    cmds:
+      - 'echo "🏗️  Rebuilding {{.SERVICE_NAME}} image (no cache)..."'
+      - "{{.COMPOSE}} build --no-cache {{.SERVICE_NAME}}"
+      - 'echo "✅ Image rebuilt successfully!"'
+
+  build:quick:
+    desc: "⚡ Quick rebuild with cache"
+    cmds:
+      - 'echo "⚡ Quick rebuild of {{.SERVICE_NAME}} image..."'
+      - "{{.COMPOSE}} build {{.SERVICE_NAME}}"
+      - 'echo "✅ Quick build completed!"'
+
+  pull:
+    desc: "⬇️  Pull latest base images"
+    silent: true
+    cmds:
+      - 'echo "⬇️  Pulling latest base images..."'
+      - "{{.COMPOSE}} pull"
+      - 'echo "✅ Base images updated!"'
+
+  # ---------------------------------------------------------------------------
+  # Feeds
+  # ---------------------------------------------------------------------------
+
+  generate:
+    desc: "🎙️  Generate RSS feeds now (works with running or stopped service)"
+    silent: true
+    cmds:
+      - |
+        echo "🎙️  Generating RSS feeds..."
+        if [ -n "$({{.COMPOSE}} ps -q {{.SERVICE_NAME}})" ]; then
+          echo "📡 Using running container..."
+          {{.COMPOSE}} exec {{.SERVICE_NAME}} python {{.APP_SCRIPT}} generate
+        else
+          echo "🚀 Starting temporary container..."
+          {{.COMPOSE}} run --rm --entrypoint '' {{.SERVICE_NAME}} python {{.APP_SCRIPT}} generate
+        fi
+        echo "✅ RSS generation completed!"
+
+  generate:watch:
+    desc: "👀 Watch configs and auto-regenerate feeds (Linux; requires inotifywait)"
+    silent: true
+    interactive: true
+    deps: [setup:dirs]
+    cmds:
+      - |
+        if ! command -v inotifywait >/dev/null 2>&1; then
+          echo "❌ inotifywait not found. Install inotify-tools or use another watcher."
+          exit 1
+        fi
+        echo "👀 Watching {{.PODCASTS_DIR}} for changes (Ctrl+C to stop)..."
+        while inotifywait -e modify,create,delete,move -r "{{.PODCASTS_DIR}}"; do
+          echo "🔄 Change detected, regenerating feeds..."
+          task generate:silent
+        done
+
+  generate:watch-public:
+    desc: "👀 Watch public media for changes (Linux; requires inotifywait)"
+    silent: true
+    interactive: true
+    deps: [setup:dirs]
+    cmds:
+      - |
+        if ! command -v inotifywait >/dev/null 2>&1; then
+          echo "❌ inotifywait not found. Install inotify-tools or use another watcher."
+          exit 1
+        fi
+        echo "👀 Watching {{.PUBLIC_DIR}} for changes (Ctrl+C to stop)..."
+        while inotifywait -e modify,create,delete,move -r "{{.PUBLIC_DIR}}"; do
+          echo "🔄 Media change detected, regenerating feeds..."
+          task generate:silent
+        done
+
+  generate:silent:
+    desc: "🤫 Generate feeds silently (internal use)"
+    silent: true
+    internal: true
+    cmds:
+      - |
+        if [ -n "$({{.COMPOSE}} ps -q {{.SERVICE_NAME}})" ]; then
+          {{.COMPOSE}} exec {{.SERVICE_NAME}} python {{.APP_SCRIPT}} generate
+        else
+          {{.COMPOSE}} run --rm --entrypoint '' {{.SERVICE_NAME}} python {{.APP_SCRIPT}} generate
+        fi
+
+  # ---------------------------------------------------------------------------
+  # Cleanup
+  # ---------------------------------------------------------------------------
+
+  clean:feeds:
+    desc: "🧹 Remove generated RSS feeds (keeps media files)"
+    silent: true
+    cmds:
+      - 'echo "🧹 Cleaning generated RSS feeds..."'
+      - rm -f {{.PUBLIC_DIR}}/*.xml
+      - 'echo "✅ RSS feeds cleaned!"'
+
+  clean:all:
+    desc: "🧹 Clean everything (containers, images, feeds)"
+    silent: true
+    prompt: "This will remove all containers, images, and RSS feeds. Continue?"
+    cmds:
+      - task: clean:feeds
+      - 'echo "🧹 Removing containers and images..."'
+      - "{{.COMPOSE}} down --rmi all --volumes"
+      - 'echo "✅ Full cleanup completed!"'
+
+  clean:docker:
+    desc: "🐳 Clean Docker resources (containers, networks, volumes)"
+    silent: true
+    prompt: "This will remove containers, networks, and volumes. Continue?"
+    cmds:
+      - 'echo "🐳 Cleaning Docker resources..."'
+      - "{{.COMPOSE}} down --volumes"
+      - docker system prune -f
+      - 'echo "✅ Docker cleanup completed!"'
+
+  # ---------------------------------------------------------------------------
+  # Utilities
+  # ---------------------------------------------------------------------------
+
+  env:
+    desc: "🌍 Show current environment variables"
+    silent: true
+    cmds:
+      - |
+        echo "🌍 Current Environment:"
+        echo 'COMPOSE={{.COMPOSE}}'
+        echo 'SERVICE_NAME={{.SERVICE_NAME}}'
+        echo 'PUBLIC_DIR={{.PUBLIC_DIR}}'
+        echo 'PODCASTS_DIR={{.PODCASTS_DIR}}'
+        echo
+        echo "🐳 Docker Compose Environment:"
+        {{.COMPOSE}} config --quiet 2>/dev/null && echo '✅ Compose file valid' || echo '❌ Compose file invalid'
+
+  health:
+    desc: "🏥 Run health check on service"
+    silent: true
+    cmds:
+      - |
+        echo "🏥 Health Check Results:"
+        task info
+        echo
+
+  version:
+    desc: "📊 Show version information"
+    silent: true
+    cmds:
+      - |
+        echo "📊 Version Information:"
+        task --version
+        docker --version
+        {{.COMPOSE}} version || true
+        echo
+        echo "📁 Project files:"
+        test -f Taskfile.yml && echo "Taskfile.yml: ✅" || echo "Taskfile.yml: ❌"
+        test -f docker-compose.yml && echo "docker-compose.yml: ✅" || echo "docker-compose.yml: ❌"
+
+  doctor:
+    desc: "🔎 Check required tools and directories"
+    silent: true
+    cmds:
+      - |
+        ok=1
+        for bin in docker task grep; do
+          command -v "$bin" >/dev/null 2>&1 || { echo "❌ Missing: $bin"; ok=0; }
+        done
+        # check compose (subcommand)
+        {{.COMPOSE}} version >/dev/null 2>&1 || { echo "❌ Problem with docker compose"; ok=0; }
+        [ -d "{{.PUBLIC_DIR}}" ]   || { echo "❌ Missing dir: {{.PUBLIC_DIR}}"; ok=0; }
+        [ -d "{{.PODCASTS_DIR}}" ] || { echo "❌ Missing dir: {{.PODCASTS_DIR}}"; ok=0; }
+        [ $ok -eq 1 ] && echo "✅ All good" || exit 1
+
+  compose:config:
+    desc: "🧩 Show resolved docker-compose config"
+    silent: true
+    cmds:
+      - "{{.COMPOSE}} config"
+
+  compose:ps:
+    desc: "📋 List compose services/containers"
+    silent: true
+    cmds:
+      - "{{.COMPOSE}} ps"
+
+  new:
+    desc: "🆕 Create a new flat config: task new NAME=myshow"
+    silent: true
+    vars:
+      NAME: '{{.NAME | default "example"}}'
+    cmds:
+      - |
+        target="{{.PODCASTS_DIR}}/{{.NAME}}-podcast.yaml"
+        if [ -f "$target" ]; then
+          echo "⚠️  Already exists: $target"; exit 1
+        fi
+        mkdir -p "{{.PODCASTS_DIR}}"
+        printf '%s\n' \
+        'name: {{.NAME}}' \
+        'title: "{{.NAME | title }} Podcast"' \
+        'description: "Personal feed for {{.NAME}}"' \
+        'author-name: "Your Name"' \
+        'author-email: "you@example.com"' \
+        'language: "en"' \
+        'explicit: false' \
+        'image: "cover.jpg"' \
+        'categories:' \
+        '  - "Technology"' \
+        '' \
+        'episodes:' \
+        '  - file: "episode-001.mp3"' \
+        '    title: "Episode 001"' \
+        '    description: "First episode"' \
+        '    pub_date: "2024-01-01T00:00:00Z"' \
+        > "$target"
+        echo "📝 Created: $target"
+        echo "📦 Put media under: {{.PUBLIC_DIR}}/{{.NAME}}/"
+
+  fix:perms:
+    desc: "🔐 Chown podcasts/public to UID:GID (Linux host). Usage: task fix:perms UID=$(id -u) GID=$(id -g)"
+    silent: true
+    vars:
+      UID: '{{.UID | default "1000"}}'
+      GID: '{{.GID | default "1000"}}'
+    cmds:
+      - sudo chown -R {{.UID}}:{{.GID}} {{.PODCASTS_DIR}} {{.PUBLIC_DIR}} || true
+
+  # ---------------------------------------------------------------------------
+  # Short aliases
+  # ---------------------------------------------------------------------------
+
+  docker:up:
+    desc: "Alias for 'up'"
+    silent: true
+    cmds: ["task up"]
+  docker:down:
+    desc: "Alias for 'down'"
+    silent: true
+    cmds: ["task down"]
+  docker:restart:
+    desc: "Alias for 'restart'"
+    silent: true
+    cmds: ["task restart"]
+  docker:logs:
+    desc: "Alias for 'logs'"
+    silent: true
+    cmds: ["task logs"]
+  docker:shell:
+    desc: "Alias for 'shell'"
+    silent: true
+    cmds: ["task shell"]
+  docker:build:
+    desc: "Alias for 'build'"
+    silent: true
+    cmds: ["task build"]
+
+  gen:
+    desc: "Quick alias for 'generate'"
+    silent: true
+    cmds: ["task generate"]

@@ -1,0 +1,19 @@
+services:
+  podcastify:
+    build:
+      context: .
+      dockerfile: docker/podcastify/Dockerfile
+    container_name: podcastify
+    ports:
+      - "${HOST_PORT:-8080}:${PORT:-8080}"
+    environment:
+      - PORT=${PORT:-8080}
+      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://localhost:${HOST_PORT:-8080}}
+      - PODCASTS_ROOT=/app/podcasts
+      - PUBLIC_ROOT=/app/public
+      - RUN_ON_START=${RUN_ON_START:-true}
+      - PUBLISH_XML=${PUBLISH_XML:-true}
+    volumes:
+      - ./public:/app/public
+      - ./podcasts:/app/podcasts
+    restart: unless-stopped
