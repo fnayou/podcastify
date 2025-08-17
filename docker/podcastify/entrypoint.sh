@@ -10,5 +10,6 @@ if [ "${RUN_ON_START:-true}" = "true" ]; then
   fi
 fi
 
-echo "🌐 Starting Caddy on :{$PORT:8080}"
-exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+echo "🌐 Starting Caddy on : $PUBLIC_BASE_URL"
+
+exec /usr/bin/supervisord -c /etc/supervisord.conf

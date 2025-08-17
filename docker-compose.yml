@@ -1,26 +1,22 @@
 services:
   podcastify:
-    # image: fnayou/podcastify:v1.0.0  # update version
     build:
       context: .
       dockerfile: docker/podcastify/Dockerfile
-    user: "10001:10001"
-    read_only: true
-    tmpfs:
-      - /tmp
-    security_opt:
-      - no-new-privileges:true
-    cap_drop: ["ALL"]
+
+    restart: unless-stopped
+
     ports:
-      - "${HOST_PORT:-8080}:${PORT:-8080}"
+      - "${HOST_PORT:-8080}:${SERVICE_PORT:-8080}"
+
     environment:
-      - PORT=${PORT:-8080}
+      - SERVICE_PORT=${SERVICE_PORT:-8080}
       - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://localhost:${HOST_PORT:-8080}}
-      - PODCASTS_ROOT=/app/podcasts
-      - PUBLIC_ROOT=/app/public
+      - PODCASTS_ROOT=${PODCASTS_ROOT:-/app/podcasts}
+      - PUBLIC_ROOT=${PUBLIC_ROOT:-/app/public}
       - RUN_ON_START=${RUN_ON_START:-true}
       - PUBLISH_XML=${PUBLISH_XML:-true}
+
     volumes:
-      - ./public:/app/public
-      - ./podcasts:/app/podcasts
-    restart: unless-stopped
+      - ./public:/app/public:rw
+      - ./podcasts:/app/podcasts:rw

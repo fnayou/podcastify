@@ -2,9 +2,10 @@ name: release
 on:
   push:
     tags:
-      - "v*.*.*" # build on semver tags
+      - "v*.*.*" # build/push on semver tags only
+  pull_request:
     branches:
-      - master # push 'latest' on default branch
+      - master # run CI on PRs; build locally, no push
 
 env:
   REGISTRY: docker.io
@@ -22,6 +23,7 @@ jobs:
       id-token: write # SBOM/provenance
       attestations: write # GitHub attestations
       security-events: write # upload SARIF to code scanning
+      pull-requests: write # needed so Scout can post PR comments
 
     steps:
       - name: Checkout
@@ -35,14 +37,16 @@ jobs:
         with:
           driver-opts: image=moby/buildkit:buildx-stable-1
 
+      # Login only on tag pushes (PRs don't have secrets from forks)
       - name: Login to Docker Hub
+        if: github.event_name == 'push'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # Works for tag or branch builds
+      # Version info (nice labels; for PRs we create a synthetic version)
       - name: Extract version
         id: version
         shell: bash
@@ -63,24 +67,25 @@ jobs:
         with:
           images: ${{ env.IMAGE_NAME }}
           tags: |
-            # Tag builds (vX.Y.Z, X.Y)
+            # For tag builds: vX.Y.Z, X.Y
             type=ref,event=tag
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            # Push 'latest' on default branch OR stable tag (no '-')
-            type=raw,value=latest,enable=${{ github.ref_type == 'branch' && github.ref_name == 'master' }}
+            # Update 'latest' only for stable tags (no pre-release suffix)
             type=raw,value=latest,enable=${{ github.ref_type == 'tag' && !contains(github.ref_name, '-') }}
           labels: |
             org.opencontainers.image.title=podcastify
-            org.opencontainers.image.description=Self-hosted podcast RSS generator (Caddy+Python)
+            org.opencontainers.image.description=tiny self-hosted podcast RSS generator. Create private podcast feeds from your own MP3s with zero fuss.
             org.opencontainers.image.licenses=MIT
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.version=${{ steps.version.outputs.version }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.created=${{ steps.meta.outputs.created }}
 
-      - name: Build & Push
-        id: build
+      # Build & push on tag pushes (multi-arch)
+      - name: Build & Push (tag)
+        id: build-push
+        if: github.event_name == 'push'
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -98,13 +103,70 @@ jobs:
             BUILD_DATE=${{ steps.meta.outputs.created }}
             VCS_REF=${{ github.sha }}
 
-      # --- Security scanning (Trivy) ---
+      # PR builds: build locally (no push), single-arch for speed
+      - name: Build (PR, no push)
+        id: build-pr
+        if: github.event_name == 'pull_request'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/podcastify/Dockerfile
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: local/podcastify:${{ github.sha }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+            BUILD_DATE=${{ steps.meta.outputs.created }}
+            VCS_REF=${{ github.sha }}
 
-      # Fail CI on CRITICAL vulns only; scan the pushed image by immutable digest
-      - name: Run Trivy vulnerability scanner (fail on CRITICAL)
+      # ---------------- Docker Scout on PRs ----------------
+      # Skip forked PRs (no secrets available)
+      - name: Note about forked PRs (no Docker Hub secrets)
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == true
+        run: echo "Skipping Docker Scout on forked PRs (no secrets). Trivy still runs."
+
+      # Login + scan only for PRs from same repo
+      - name: Login to Docker Hub (PR, same-repo only)
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false
+        uses: docker/login-action@v3
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Docker Scout (PR)
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false
+        id: docker-scout
+        continue-on-error: true
+        uses: docker/scout-action@v1
+        with:
+          command: cves
+          image: local://local/podcastify:${{ github.sha }}
+          only-severities: critical,high
+          only-fixed: true
+          summary: true
+          write-comment: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          sarif-file: docker-scout.sarif
+
+      - name: Upload SARIF (Scout, PR)
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: docker-scout.sarif
+
+      # ---------------- Security scanning (Trivy) ----------------
+
+      # Tag pushes: scan the pushed image by immutable digest (fail on CRITICAL)
+      - name: Trivy scan (push, fail on CRITICAL)
+        if: github.event_name == 'push'
         uses: aquasecurity/trivy-action@0.24.0
         with:
-          image-ref: "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}"
+          image-ref: "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build-push.outputs.digest }}"
           format: "table"
           vuln-type: "os,library"
           severity: "CRITICAL"
@@ -112,12 +174,26 @@ jobs:
           exit-code: "1"
           hide-progress: true
 
-      # Generate SARIF for the Security tab (does not fail the job)
-      - name: Run Trivy (SARIF)
-        if: always()
+      # PRs: scan the local image (non-blocking)
+      - name: Trivy scan (PR, non-blocking)
+        if: github.event_name == 'pull_request'
         uses: aquasecurity/trivy-action@0.24.0
         with:
-          image-ref: "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}"
+          image-ref: "local/podcastify:${{ github.sha }}"
+          format: "table"
+          vuln-type: "os,library"
+          severity: "CRITICAL,HIGH"
+          ignore-unfixed: true
+          exit-code: "0"
+          hide-progress: true
+
+      # SARIF for tag pushes
+      - name: Trivy SARIF (push)
+        id: sarif-push
+        if: github.event_name == 'push'
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build-push.outputs.digest }}"
           format: "sarif"
           output: "trivy-results.sarif"
           vuln-type: "os,library"
@@ -125,19 +201,39 @@ jobs:
           ignore-unfixed: true
           hide-progress: true
 
-      - name: Upload Trivy SARIF to GitHub Security
-        if: always()
+      - name: Upload SARIF (Trivy, push)
+        if: steps.sarif-push.outcome == 'success'
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: "trivy-results.sarif"
 
-      # Optional: attest the pushed digest
+      # SARIF for PRs
+      - name: Trivy SARIF (PR)
+        id: sarif-pr
+        if: github.event_name == 'pull_request'
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: "local/podcastify:${{ github.sha }}"
+          format: "sarif"
+          output: "trivy-results.sarif"
+          vuln-type: "os,library"
+          severity: "CRITICAL,HIGH,MEDIUM,LOW"
+          ignore-unfixed: true
+          hide-progress: true
+
+      - name: Upload SARIF (Trivy, PR)
+        if: steps.sarif-pr.outcome == 'success'
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: "trivy-results.sarif"
+
+      # Attest only for tag builds with fully-qualified subject-name
       - name: Generate artifact attestation
-        if: github.repository_owner == 'fnayou'
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
         uses: actions/attest-build-provenance@v1
         with:
-          subject-name: ${{ env.IMAGE_NAME }}
-          subject-digest: ${{ steps.build.outputs.digest }}
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.build-push.outputs.digest }}
           push-to-registry: true
 
   # Optional: GitHub Release for tag builds
