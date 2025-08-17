@@ -19,7 +19,7 @@ Create private podcast feeds from your own MP3s with minimal setup. Drop MP3s in
 - Simple layout: `./podcasts/*.yaml` for configs, `./public/<name>/` for media and images.
 - Auto-discovery of episodes if you omit the `episodes:` list.
 - MP3 duration extraction via `ffprobe` (falls back gracefully).
-- iTunes fields: author, owner, subtitle, summary, explicit, categories, episode types, seasons, and more.
+- iTunes fields: author, owner, subtitle, summary, explicit, categories, episode types, seasons.
 - Clean XML: stable GUIDs (SHA-1), configurable language, empty tags rather than empty CDATA.
 - Single container image: Caddy (static hosting) + Python generator.
 - Developer-friendly Taskfile with commands like `task up`, `task generate`, `task logs`.
@@ -159,6 +159,36 @@ The image ships with a Caddyfile that uses an environment variable for the port 
   }
 }
 ```
+
+---
+
+## Security hardening
+
+The image runs fine as-is. For additional defense-in-depth, you can apply these Compose settings with **v1.0.0 and later** without changing the image:
+
+```yaml
+services:
+  podcastify:
+    # ... your existing config ...
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: ["ALL"]
+```
+
+These settings make the root filesystem read-only (your mounted `public/` and `podcasts/` remain writable), prevent privilege escalation, and drop Linux capabilities (the app listens on high port `${PORT}` so none are needed).
+
+If you later publish an image that runs as a non-root user by default (for example `v1.0.1+`), you can also add:
+
+```yaml
+services:
+  podcastify:
+    user: "10001:10001"
+```
+
+and keep the same hardening flags above.
 
 ---
 

@@ -1,9 +1,16 @@
 services:
   podcastify:
+    # image: fnayou/podcastify:v1.0.0  # update version
     build:
       context: .
       dockerfile: docker/podcastify/Dockerfile
-    container_name: podcastify
+    user: "10001:10001"
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: ["ALL"]
     ports:
       - "${HOST_PORT:-8080}:${PORT:-8080}"
     environment:
