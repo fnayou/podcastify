@@ -2,33 +2,85 @@ name: release
 on:
   push:
     tags:
-      - "v*.*.*"
+      - "v*.*.*" # build on semver tags
+    branches:
+      - master # push 'latest' on default branch
+
+env:
+  REGISTRY: docker.io
+  IMAGE_NAME: fnayou/podcastify
 
 jobs:
   docker:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: false
     permissions:
       contents: read
+      packages: write
+      id-token: write # SBOM/provenance
+      attestations: write # GitHub attestations
+      security-events: write # upload SARIF to code scanning
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Set up QEMU
-      - uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
-      - uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: image=moby/buildkit:buildx-stable-1
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
+          registry: ${{ env.REGISTRY }}
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Extract tag
+      # Works for tag or branch builds
+      - name: Extract version
+        id: version
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+            IS_PRERELEASE="$([[ "${GITHUB_REF_NAME}" == *-* ]] && echo true || echo false)"
+          else
+            VERSION="$(date -u +%Y%m%d)-${GITHUB_SHA::7}"
+            IS_PRERELEASE=false
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "is_prerelease=${IS_PRERELEASE}" >> "$GITHUB_OUTPUT"
+
+      - name: Docker meta
         id: meta
-        run: echo "VERSION=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            # Tag builds (vX.Y.Z, X.Y)
+            type=ref,event=tag
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            # Push 'latest' on default branch OR stable tag (no '-')
+            type=raw,value=latest,enable=${{ github.ref_type == 'branch' && github.ref_name == 'master' }}
+            type=raw,value=latest,enable=${{ github.ref_type == 'tag' && !contains(github.ref_name, '-') }}
+          labels: |
+            org.opencontainers.image.title=podcastify
+            org.opencontainers.image.description=Self-hosted podcast RSS generator (Caddy+Python)
+            org.opencontainers.image.licenses=MIT
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created=${{ steps.meta.outputs.created }}
 
       - name: Build & Push
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -37,13 +89,83 @@ jobs:
           push: true
           sbom: true
           provenance: true
-          tags: |
-            yourname/podcastify:latest
-            yourname/podcastify:${{ steps.meta.outputs.VERSION }}
-          labels: |
-            org.opencontainers.image.title=PodCastify
-            org.opencontainers.image.description=Create private podcast feeds from your own MP3s with zero fuss.
-            org.opencontainers.image.licenses=MIT
-            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.version=${{ steps.meta.outputs.VERSION }}
-            org.opencontainers.image.authors=Aymen FNAYOU <fnayou.aymen@gmail.com>
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+            BUILD_DATE=${{ steps.meta.outputs.created }}
+            VCS_REF=${{ github.sha }}
+
+      # --- Security scanning (Trivy) ---
+
+      # Fail CI on CRITICAL vulns only; scan the pushed image by immutable digest
+      - name: Run Trivy vulnerability scanner (fail on CRITICAL)
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}"
+          format: "table"
+          vuln-type: "os,library"
+          severity: "CRITICAL"
+          ignore-unfixed: true
+          exit-code: "1"
+          hide-progress: true
+
+      # Generate SARIF for the Security tab (does not fail the job)
+      - name: Run Trivy (SARIF)
+        if: always()
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}"
+          format: "sarif"
+          output: "trivy-results.sarif"
+          vuln-type: "os,library"
+          severity: "CRITICAL,HIGH,MEDIUM,LOW"
+          ignore-unfixed: true
+          hide-progress: true
+
+      - name: Upload Trivy SARIF to GitHub Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: "trivy-results.sarif"
+
+      # Optional: attest the pushed digest
+      - name: Generate artifact attestation
+        if: github.repository_owner == 'fnayou'
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-name: ${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+  # Optional: GitHub Release for tag builds
+  release:
+    runs-on: ubuntu-latest
+    needs: docker
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Create Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref_name }}
+          release_name: Release ${{ github.ref_name }}
+          body: |
+            ## Docker Image
+            ```
+            docker pull ${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+            ```
+            ## Notes
+            - Multi-arch: linux/amd64, linux/arm64
+            - SBOM and provenance attached
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}

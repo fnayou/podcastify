@@ -1,40 +1,28 @@
-# Combined image: Python (generator) + Caddy (static server)
-FROM python:3.12-alpine
-
-LABEL org.opencontainers.image.authors="Aymen FNAYOU <fnayou.aymen@gmail.com>"
-LABEL org.opencontainers.image.title="PodCastify"
-LABEL org.opencontainers.image.description="Create private podcast feeds from your own MP3s with zero fuss."
-LABEL org.opencontainers.image.source="https://github.com/fnayou/podcastify"
-
-# system packages
-RUN apk add --no-cache caddy ffmpeg
-
-WORKDIR /app
-
-COPY requirements.txt /tmp/requirements.txt
-RUN pip install --no-cache-dir -r /tmp/requirements.txt || pip install --no-cache-dir PyYAML
+FROM python:3.12-alpine3.21
 
 
-# copy generator from project root into image
+RUN apk add --no-cache --update caddy ffmpeg \
+  && apk upgrade --no-cache
+
+RUN addgroup -S app && adduser -S -G app -u 10001 app \
+  && mkdir -p /app/public /app/podcasts /config /data \
+  && chown -R app:app /app /config /data
+
+
+COPY requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
+
 COPY app.py /app/app.py
-
-# copy caddy config from repo
 COPY docker/podcastify/Caddyfile /etc/caddy/Caddyfile
+COPY docker/podcastify/entrypoint.sh /entrypoint.sh
+COPY docker/podcastify/supervisord.conf /etc/supervisord.conf
 
-# prepare directories
-RUN mkdir -p /app/public /app/podcasts
-
-# environment defaults
 ENV PORT=8080 \
-  PUBLIC_BASE_URL=http://localhost:8080 \
   PODCASTS_ROOT=/app/podcasts \
   PUBLIC_ROOT=/app/public \
   RUN_ON_START=true \
   PUBLISH_XML=true
-# EXPOSE 8080  # (optional, informational only)
 
-# simple entrypoint: optionally run generator, then start caddy
-COPY docker/podcastify/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
-
+USER app
+EXPOSE 8080
 ENTRYPOINT ["/entrypoint.sh"]
