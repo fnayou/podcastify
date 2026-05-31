@@ -11,6 +11,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # App + configs
 COPY app.py /app/
+COPY podcastify/ /app/podcastify/
 COPY docker/podcastify/Caddyfile        /etc/caddy/Caddyfile
 COPY docker/podcastify/supervisord.conf /etc/supervisord.conf
 COPY docker/podcastify/entrypoint.sh    /entrypoint.sh

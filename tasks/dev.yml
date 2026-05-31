@@ -1,0 +1,32 @@
+version: "3"
+
+tasks:
+  test:
+    desc: Run tests
+    cmds:
+      - |
+        PY=python3
+        [ -x .venv/bin/python ] && PY=.venv/bin/python
+        $PY -m pytest tests/ -v
+
+  test:coverage:
+    desc: Run tests with coverage (fail under 90%)
+    cmds:
+      - |
+        PY=python3
+        [ -x .venv/bin/python ] && PY=.venv/bin/python
+        $PY -m pytest tests/ --cov=podcastify --cov-report=term-missing --cov-fail-under=90 -v
+
+  test:ci:
+    desc: Run tests for CI (strict, no TTY)
+    cmds:
+      - |
+        PY=python3
+        [ -x .venv/bin/python ] && PY=.venv/bin/python
+        $PY -m pytest tests/ --cov=podcastify --cov-report=term-missing --cov-fail-under=90 --tb=short -q
+
+  validate:
+    desc: Run coverage tests and quick Docker build
+    cmds:
+      - task: test:coverage
+      - task docker:build:quick
