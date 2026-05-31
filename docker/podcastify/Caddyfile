@@ -5,10 +5,14 @@
 
   @rss path *.xml
   header @rss Content-Type "application/rss+xml; charset=utf-8"
-  header @rss Cache-Control "no-cache"
+  header @rss Cache-Control "public, max-age=300, must-revalidate"
 
-  @assets path *.mp3 *.jpg *.jpeg *.png *.webp
-  header @assets Cache-Control "public, max-age=31536000, immutable"
+  @mp3 path *.mp3
+  header @mp3 Cache-Control "public, max-age=31536000, immutable"
+  header @mp3 Content-Type "audio/mpeg"
+
+  @images path *.jpg *.jpeg *.png *.webp
+  header @images Cache-Control "public, max-age=86400"
 
   file_server {
     browse

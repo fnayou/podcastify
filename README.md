@@ -12,6 +12,15 @@ Create private podcast feeds from your own MP3s with minimal setup. Drop MP3s in
 - Docker Hub profile: **https://hub.docker.com/u/fnayou**
 - Author GitHub: **https://github.com/fnayou**
 
+## Documentation
+
+- [Getting Started](docs/getting-started.md) — Install, run, first feed
+- [Configuration](docs/configuration.md) — Complete YAML reference
+- [Deployment](docs/deployment.md) — Docker, reverse proxy, hardening
+- [Architecture](docs/architecture.md) — How it works internally
+- [Troubleshooting](docs/troubleshooting.md) — Common issues and fixes
+- [Contributing](docs/contributing.md) — Dev setup, style, PRs
+
 ---
 
 ## Features
@@ -22,7 +31,7 @@ Create private podcast feeds from your own MP3s with minimal setup. Drop MP3s in
 - iTunes fields: author, owner, subtitle, summary, explicit, categories, episode types, seasons.
 - Clean XML: stable GUIDs (SHA-1), configurable language, empty tags rather than empty CDATA.
 - Single container image: Caddy (static hosting) + Python generator.
-- Developer-friendly Taskfile with commands like `task up`, `task generate`, `task logs`.
+- Developer-friendly Taskfile (contributors only) with namespaced commands like `task docker:up`, `task podcastify:generate`.
 - Configurable ports: choose any host port (e.g., `1234`) via `.env` / Compose. Caddy listens on `${PORT}` inside the container.
 
 ---
@@ -194,6 +203,8 @@ and keep the same hardening flags above.
 
 ## Quickstart (local development with Taskfile)
 
+Task is for **contributors and local development** only. End users can run the published Docker image without installing Task.
+
 1. Clone and configure
    ```bash
    git clone https://github.com/fnayou/podcastify
@@ -203,13 +214,13 @@ and keep the same hardening flags above.
 
 2. Start the stack
    ```bash
-   task up
+   task docker:up
    ```
 
 3. Create a podcast
    ```bash
    # scaffold a new config: podcasts/myshow-podcast.yaml
-   task new NAME=myshow
+   task podcastify:new NAME=myshow
 
    # add media under public/myshow/
    mkdir -p public/myshow
@@ -219,7 +230,7 @@ and keep the same hardening flags above.
 
 4. Generate feeds
    ```bash
-   task generate
+   task podcastify:generate
    ```
 
 5. Subscribe
@@ -274,39 +285,47 @@ Notes:
 
 ---
 
-## Task commands
+## Task commands (development)
 
 ```bash
-task                 # show task list
-task up              # build and start container
-task down            # stop and remove
-task restart         # restart
-task status          # ps + recent logs
+task                          # show task list
 
-task generate        # run the generator now
-task logs            # follow logs
-task logs:recent     # recent logs only
-task logs:errors     # grep errors/warnings
-task shell           # shell into container
-task shell:root      # root shell
+# Docker (local stack)
+task docker:up                # build and start container
+task docker:down              # stop and remove
+task docker:restart           # restart
+task docker:status            # ps + recent logs
+task docker:logs              # follow logs
+task docker:logs:recent       # recent logs only
+task docker:logs:errors       # grep errors/warnings
+task docker:shell             # shell into container
+task docker:shell:root        # root shell
+task docker:build:quick       # quick image rebuild
+task docker:compose:ps        # docker compose ps
+task docker:compose:config    # resolved compose config
+task docker:clean             # down + prune volumes
+task docker:clean:all         # feeds + containers + images
 
-task new NAME=myshow # scaffold a new config
-task generate:watch  # watch ./podcasts (Linux, inotifywait)
-task generate:watch-public # watch ./public (Linux, inotifywait)
+# Podcastify app
+task podcastify:generate      # run the generator now
+task podcastify:new NAME=myshow
+task podcastify:watch         # watch ./podcasts (Linux, inotifywait)
+task podcastify:watch-public  # watch ./public (Linux, inotifywait)
+task podcastify:clean:feeds   # delete generated XML
 
-task clean:feeds     # delete generated XML
-task clean:docker    # down + prune
-task doctor          # quick env and directory checks
-task compose:ps      # docker compose ps
-task compose:config  # show resolved compose config
+# Development
+task dev:test                 # run tests
+task dev:test:coverage        # tests with 90% coverage gate
+task dev:validate             # coverage + docker build
+task doctor                   # env and directory checks
 ```
 
 ---
 
 ## How it works
 
-- On `task up`, the container starts Caddy and optionally runs the generator at boot (`RUN_ON_START=true`).
-- You can run the generator any time with `task generate`.
+- On `task docker:up`, the container starts Caddy and optionally runs the generator at boot (`RUN_ON_START=true`).
+- You can run the generator any time with `task podcastify:generate`.
 - The XML `<generator>` tag is `podcastify`.
 - Episode GUIDs default to a SHA-1 of `<podcast>/<filename>` and are not permalinks.
 

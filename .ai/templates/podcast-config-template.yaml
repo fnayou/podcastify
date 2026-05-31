@@ -1,0 +1,19 @@
+name: "myshow"
+title: "My Private Show"
+author-name: "Your Name"
+author-email: "you@example.com"
+description: "Personal feed for testing"
+language: "en"
+explicit: false
+image: "cover.jpg"
+categories:
+  - "Technology"
+
+episodes:
+  - file: "ep01.mp3"
+    title: "Hello World"
+    description: "First episode"
+    pub_date: "2025-01-01T08:00:00Z"
+    season: 1
+    episode: 1
+    episode_type: "full"

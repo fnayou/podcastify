@@ -1,0 +1,21 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "default_agent": "plan",
+  "instructions": [".ai/rules/rules.md", "AGENTS.md"],
+  "skills": {
+    "paths": [".ai/skills"]
+  },
+  "_comment_legacy_plan_model": "google/gemini-3.1-pro-low",
+  "_comment_legacy_build_model": "google/gemini-3.1-pro-low",
+  "agent": {
+    "plan": {
+      "model": "opencode-go/glm-5.1"
+    },
+    "build": {
+      "model": "opencode-go/kimi-k2.6"
+    },
+    "reviewer": {
+      "model": "opencode-go/kimi-k2.6"
+    }
+  }
+}
