@@ -2,18 +2,19 @@
 
 ## Overview
 
-Podcastify is a single-file Python application (`app.py`) with a class-based architecture. It reads YAML configs, discovers MP3 files, extracts metadata, and generates iTunes-compatible RSS XML feeds.
+Podcastify is a Python **package** (`podcastify/`) + thin `app.py` entry point. Reads YAML configs, discovers MP3 files, extracts metadata, generates iTunes-compatible RSS feeds. See [deployment](deployment.md) for container runtime.
 
-## Classes
+## Modules and Classes
 
-| Class | Responsibility |
-|---|---|
-| `Config` | Centralized constants and environment variables. |
-| `MediaProcessor` | `ffprobe` duration extraction and iTunes duration formatting. |
-| `ConfigurationManager` | YAML loading, metadata extraction, podcast config discovery. |
-| `EpisodeManager` | Episode discovery (explicit list or auto-scan), image URL resolution. |
-| `RSSGenerator` | iTunes-compatible XML feed generation with all channel/episode tags. |
-| `PodcastProcessor` | Orchestrator: load configs → discover episodes → generate feeds. |
+| Module | Class / fn | Responsibility |
+|---|---|---|
+| `podcastify/config.py` | `Config`, `_EnvVar` | Env-var descriptors, field whitelists. |
+| `podcastify/media.py` | `MediaProcessor` | ffprobe duration extraction, persistent cache, iTunes formatting. |
+| `podcastify/parser.py` | `ConfigurationManager`, `EpisodeManager`, pydantic models | YAML load + validate, metadata extraction, episode/image discovery. |
+| `podcastify/rss.py` | `RSSGenerator` | iTunes-compatible XML feed generation. |
+| `podcastify/cli.py` | `PodcastProcessor`, `main` | Orchestration: load → validate → discover → generate → atomic write. |
+
+Note: 6 logical classes in 5 modules; `ConfigurationManager` + `EpisodeManager` (+ pydantic models + helpers) share `parser.py`.
 
 ## Data Flow
 

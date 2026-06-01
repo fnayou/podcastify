@@ -19,6 +19,7 @@ class _EnvVar:
 class Config:
     PODCASTS_ROOT = _EnvVar("PODCASTS_ROOT", "/app/podcasts", lambda v: Path(v))
     PUBLIC_ROOT = _EnvVar("PUBLIC_ROOT", "/app/public", lambda v: Path(v))
+    CACHE_ROOT = _EnvVar("CACHE_ROOT", "/app/.cache", lambda v: Path(v))
     BASE_URL = _EnvVar("PUBLIC_BASE_URL", "http://localhost:8080")
     PUBLISH_XML = _EnvVar("PUBLISH_XML", "true", lambda v: v.lower() == "true")
     RUN_ON_START = _EnvVar("RUN_ON_START", "true", lambda v: v.lower() == "true")

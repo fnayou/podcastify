@@ -6,7 +6,7 @@ User invokes `/review` or asks for a pre-commit code review.
 
 ## Execution
 
-1. Read and apply project rules (already in OpenCode `instructions`: [AGENTS.md](../../AGENTS.md), [.ai/rules/rules.md](../rules/rules.md)).
+1. Read and apply project rules (already in OpenCode `instructions`: [AGENTS.md](../../AGENTS.md), [.claude/rules/rules.md](../rules/rules.md)).
 
 2. Inspect changes:
    - `git status`

@@ -79,7 +79,7 @@ tasks:
     silent: true
     vars:
       NAME: '{{.NAME | default "example"}}'
-      TEMPLATE: .ai/templates/podcast-config-template.yaml
+      TEMPLATE: .claude/templates/podcast-config-template.yaml
     cmds:
       - |
         target="{{.PODCASTS_DIR}}/{{.NAME}}-podcast.yaml"

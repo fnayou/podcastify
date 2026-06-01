@@ -18,9 +18,9 @@ venv/
 .vscode/
 
 # AI plan files (local scratch)
-.ai/plan/*.md
-!.ai/plan/.gitkeep
-!.ai/plan/archive/*
+.claude/plan/*.md
+!.claude/plan/.gitkeep
+!.claude/plan/archive/*
 
 # AI-generated PR summaries (local scratch)
 .pr/
@@ -46,3 +46,4 @@ podcasts/*
 
 public/*
 !public/.gitkeep
+.ropeproject/

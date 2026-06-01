@@ -14,7 +14,7 @@ class MediaProcessor:
 
     @classmethod
     def _cache_path(cls) -> Path:
-        return Config.PUBLIC_ROOT / Config.CACHE_FILENAME
+        return Config.CACHE_ROOT / Config.CACHE_FILENAME
 
     @classmethod
     def _cache_key(cls, mp3_path: Path, mtime: float) -> str:
@@ -25,6 +25,9 @@ class MediaProcessor:
         if cls._disk_loaded:
             return
         cls._disk_loaded = True
+
+        cls._migrate_legacy_cache()
+
         path = cls._cache_path()
         if not path.exists():
             return
@@ -42,14 +45,32 @@ class MediaProcessor:
             log(f"[WARN] Failed to load duration cache: {e}")
 
     @classmethod
+    def _migrate_legacy_cache(cls) -> None:
+        """Migrate cache from old PUBLIC_ROOT location to new CACHE_ROOT."""
+        legacy_path = Config.PUBLIC_ROOT / Config.CACHE_FILENAME
+        new_path = cls._cache_path()
+
+        if legacy_path.exists() and not new_path.exists():
+            try:
+                legacy_data = json.loads(legacy_path.read_text(encoding="utf-8"))
+                if isinstance(legacy_data, dict):
+                    new_path.parent.mkdir(parents=True, exist_ok=True)
+                    new_path.write_text(json.dumps(legacy_data), encoding="utf-8")
+                    legacy_path.unlink()
+                    log(f"[INFO] Migrated cache from {legacy_path} to {new_path}")
+            except (OSError, json.JSONDecodeError) as e:
+                log(f"[WARN] Failed to migrate legacy cache: {e}")
+
+    @classmethod
     def _save_disk_cache(cls) -> None:
         path = cls._cache_path()
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
-            serializable = {
-                cls._cache_key(Path(k[0]), k[1]): v
-                for k, v in cls._duration_cache.items()
-            }
+            serializable = {}
+            for k, v in cls._duration_cache.items():
+                file_path = Path(k[0])
+                if file_path.exists():
+                    serializable[cls._cache_key(file_path, k[1])] = v
             path.write_text(json.dumps(serializable), encoding="utf-8")
         except OSError as e:
             log(f"[WARN] Failed to save duration cache: {e}")

@@ -42,11 +42,11 @@ Refactor the developer Taskfile into namespaced, emoji-free tasks: `docker:*` fo
 - `task --list` shows `docker:*`, `podcastify:*`, and `dev:*` namespaces plus root tasks.
 - No emoji in Taskfile(s).
 - `podcastify:setup:dirs` exists; watch tasks depend on it.
-- `podcastify:new` uses `.ai/templates/podcast-config-template.yaml`.
+- `podcastify:new` uses `.opencode/templates/podcast-config-template.yaml`.
 - `dev:validate` runs coverage tests and `docker:build:quick`.
 - `task dev:test:coverage` passes with >= 90% coverage on `podcastify/`.
 - `task docker:build:quick` succeeds.
-- README, AGENTS.md, docs, `.ai/rules/rules.md`, and validate-changes skill use new task names.
+- README, AGENTS.md, docs, `.opencode/rules/rules.md`, and validate-changes skill use new task names.
 - No stale `task up` / `task generate` / `task test:` references in project docs.
 
 ## Tasks
@@ -54,5 +54,5 @@ Refactor the developer Taskfile into namespaced, emoji-free tasks: `docker:*` fo
 - [x] Remove emoji; fix internal task references and preconditions
 - [x] Add `podcastify:setup:dirs`; wire watch dependencies
 - [x] Add `dev:validate`; update validate-changes skill
-- [x] Update README, AGENTS.md, docs/*, `.ai/rules/rules.md`
+- [x] Update README, AGENTS.md, docs/*, `.opencode/rules/rules.md`
 - [x] Run `task dev:test:coverage` and `task docker:build:quick` (via `task dev:validate`)

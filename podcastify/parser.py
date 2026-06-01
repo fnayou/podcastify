@@ -27,6 +27,8 @@ def _coerce_bool(value: Any, default: bool = False) -> bool:
     return bool(value)
 
 
+
+
 def _sanitize_name(name: str) -> str:
     return name.replace("..", "").replace("/", "").replace("\\", "").strip()
 

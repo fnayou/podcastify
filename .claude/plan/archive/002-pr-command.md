@@ -7,7 +7,7 @@ Add an AI skill and command (`/pr`) that automatically generates a Pull Request 
 - **Command Trigger**: `/pr`
 - **Output Directory**: `.pr/`
 - **Filename Format**: `pr-summary-YYYYMMDD-HHMM.md`
-- **Skill Definition**: A new markdown file `.ai/skills/pr-command.md` describing the execution steps for the agent.
+- **Skill Definition**: A new markdown file `.opencode/skills/pr-command.md` describing the execution steps for the agent.
 
 ## Constraints
 - The `.pr` directory must be ignored by git (added to `.gitignore`).
@@ -22,5 +22,5 @@ Add an AI skill and command (`/pr`) that automatically generates a Pull Request 
 - `.pr/` is successfully listed in `.gitignore`.
 
 ## Tasks
-- [x] Task 1: Create the `.ai/skills/pr-command.md` file detailing the trigger and execution instructions for the agent.
+- [x] Task 1: Create the `.opencode/skills/pr-command.md` file detailing the trigger and execution instructions for the agent.
 - [x] Task 2: Ensure `.pr/` is appended to the `.gitignore` file.

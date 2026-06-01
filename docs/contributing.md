@@ -24,7 +24,7 @@
 
 4. Optional — OpenCode for AI-assisted development:
    ```bash
-   cp .env.example .env   # sets OPENCODE_CONFIG=.ai/opencode.json
+   cp .env.example .env   # sets OPENCODE_CONFIG=.opencode/opencode.json
    ```
    Slash commands: `/pr`, `/review`, `/release`, `/validate-changes` (see [AGENTS.md](../AGENTS.md#slash-commands)).
 

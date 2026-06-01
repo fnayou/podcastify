@@ -22,6 +22,23 @@ class PodcastProcessor:
         self.episode_manager = EpisodeManager()
         self.rss_generator = RSSGenerator()
 
+    def _build_metadata_from_model(self, model: Any) -> Dict[str, Any]:
+        """Build metadata dict from validated PodcastChannelModel."""
+        if not model:
+            return {}
+        meta = {}
+        for field in Config.CHANNEL_FIELDS:
+            field_alias = field
+            if field == "author-name":
+                value = getattr(model, "author_name", None)
+            elif field == "author-email":
+                value = getattr(model, "author_email", None)
+            else:
+                value = getattr(model, field, None)
+            if value is not None:
+                meta[field_alias] = value
+        return meta
+
     def process_podcast(self, podcast_name: str, config_path: Path) -> bool:
         try:
             cfg = self.config_manager.load_yaml(config_path)
@@ -34,12 +51,10 @@ class PodcastProcessor:
                 log(f"[ERROR] Config validation failed for {podcast_name}: {err}")
                 return False
 
-            meta = self.config_manager.extract_podcast_metadata(cfg)
-            if validated:
-                meta.setdefault("title", validated.title)
-                meta.setdefault("description", validated.description)
-                if validated.author_name:
-                    meta.setdefault("author-name", validated.author_name)
+            meta = self._build_metadata_from_model(validated)
+            if not meta:
+                log(f"[ERROR] Failed to build metadata for {podcast_name}")
+                return False
 
             cfg_name = meta.get("name")
             if cfg_name and cfg_name != podcast_name:

@@ -5,7 +5,7 @@ Add an AI skill and command (`/validate-changes`) that allows the user or agent 
 
 ## Modeling
 - **Command Trigger**: `/validate-changes`
-- **Skill Definition**: A new markdown file `.ai/skills/validate-changes-command.md` containing the execution steps for the agent.
+- **Skill Definition**: A new markdown file `.opencode/skills/validate-changes-command.md` containing the execution steps for the agent.
 
 ## Constraints
 - The command must execute the mandatory full testing suite (`task test:coverage` or `task test:ci`).
@@ -17,4 +17,4 @@ Add an AI skill and command (`/validate-changes`) that allows the user or agent 
 - The agent reports a summary of the test executions back to the user in a clean format.
 
 ## Tasks
-- [x] Task 1: Create the `.ai/skills/validate-changes-command.md` file specifying the trigger and execution instructions (running both unit/coverage tests and container build checks).
+- [x] Task 1: Create the `.opencode/skills/validate-changes-command.md` file specifying the trigger and execution instructions (running both unit/coverage tests and container build checks).
