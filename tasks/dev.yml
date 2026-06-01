@@ -30,3 +30,38 @@ tasks:
     cmds:
       - task: test:coverage
       - task docker:build:quick
+
+  smoke:
+    desc: Build and test container with smoke test (curl checks)
+    cmds:
+      - |
+        set -e
+        echo "Building image..."
+        task docker:build:quick
+
+        IMAGE="podcastify-podcastify:latest"
+        echo "Using image: $IMAGE"
+
+        CONTAINER_ID=$(docker run -d \
+          -p 18080:8080 \
+          -e SERVICE_PORT=8080 \
+          -e PUBLIC_BASE_URL=http://localhost:8080 \
+          -e RUN_ON_START=false \
+          -v /tmp/podcastify-test/podcasts:/app/podcasts:rw \
+          -v /tmp/podcastify-test/public:/app/public:rw \
+          "$IMAGE")
+        trap "docker stop $CONTAINER_ID 2>/dev/null; docker rm $CONTAINER_ID 2>/dev/null" EXIT
+
+        echo "Waiting for container to be ready..."
+        sleep 3
+
+        echo "Testing root endpoint..."
+        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:18080/)
+        if [ "$HTTP_CODE" = "200" ]; then
+          echo "✓ Root endpoint returned 200"
+        else
+          echo "✗ Root endpoint returned $HTTP_CODE (expected 200)"
+          exit 1
+        fi
+
+        echo "Smoke test passed!"

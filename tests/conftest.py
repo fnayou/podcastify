@@ -15,10 +15,10 @@ def reset_env(monkeypatch):
     """Reset environment variables to defaults before each test."""
     monkeypatch.setenv("PODCASTS_ROOT", "/app/podcasts")
     monkeypatch.setenv("PUBLIC_ROOT", "/app/public")
+    monkeypatch.setenv("CACHE_ROOT", "/app/.cache")
     monkeypatch.setenv("PUBLIC_BASE_URL", "http://localhost:8080")
     monkeypatch.setenv("PUBLISH_XML", "true")
     monkeypatch.setenv("RUN_ON_START", "true")
-    monkeypatch.setenv("LOG_LEVEL", "INFO")
 
 
 @pytest.fixture

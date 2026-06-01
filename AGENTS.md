@@ -59,56 +59,55 @@ task dev:test:coverage          # Tests with coverage gate
 ## AI Workflow
 
 - **`AGENTS.md`** is the source of truth regarding AI.
-- **`.ai/`** is the directory where all AI files and resources belong (except `AGENTS.md`).
-- The **`.ai/`** directory contains commands, rules, skills, and OpenCode configuration.
+- **`.claude/`** is the directory where all AI files and resources belong (except `AGENTS.md`).
+- The **`.claude/`** directory contains agents, commands, rules, skills, plans, and templates.
+- **`.opencode/`** contains only `opencode.json` — OpenCode tool configuration, pointing into `.claude/`.
 
-Detailed rules live in [`.ai/rules/rules.md`](.ai/rules/rules.md).
+Detailed rules live in [`.claude/rules/rules.md`](.claude/rules/rules.md).
 
-### Directory layout (`.ai/`)
+### Directory layout (`.claude/`)
 
 ```
-.ai/
-  opencode.json       # OpenCode agent and skill configuration
-  rules/rules.md      # Project rules (auto-loaded)
+.claude/
+  agents/             # Claude Code subagent definitions
+  rules/rules.md      # Project rules (auto-loaded by OpenCode)
   skills/             # Workflow definitions (how to perform each task)
   commands/           # Slash commands that delegate to a skill
   plan/               # Feature plans (gitignored scratch)
     archive/          # Completed plans
   templates/          # Boilerplate (podcast YAML, test template)
-.opencode/
-  commands/           # Symlink to .ai/commands/ (OpenCode TUI discovery)
-.agents/rules/        # Optional tool-specific rules (read when relevant)
 ```
 
-### OpenCode ([`.ai/opencode.json`](.ai/opencode.json))
+### OpenCode ([`.opencode/opencode.json`](.opencode/opencode.json))
 
-Set `OPENCODE_CONFIG=.ai/opencode.json` in `.env` (see [`.env.example`](.env.example)).
+Set `OPENCODE_CONFIG=.opencode/opencode.json` in `.env` (see [`.env.example`](.env.example)).
 
 | Setting | Value |
 |---------|--------|
-| `default_agent` | `plan` |
-| **Instructions** (always loaded) | `.ai/rules/rules.md`, `AGENTS.md` |
-| **Skills** | `.ai/skills/` |
+| `default_agent` | `planner` |
+| **Instructions** (always loaded) | `.claude/rules/rules.md`, `AGENTS.md` |
+| **Skills** (flat command-templates) | `.claude/skills/*-command.md` |
 
-| Agent | Model | Used by |
-|-------|--------|---------|
-| `plan` | `opencode-go/glm-5.1` | Planning, `/release` |
-| `build` | `opencode-go/kimi-k2.6` | Implementation, `/pr`, `/validate-changes` |
-| `reviewer` | `opencode-go/kimi-k2.6` | `/review` |
+| Agent | Mode | OpenCode model | Claude Code model | Used by |
+|-------|------|---|---|---|
+| `planner` | primary | `opencode-go/glm-5.1` | Sonnet 4.6 | Planning, design, `/release` |
+| `builder` | primary | `opencode-go/kimi-k2.6` | Haiku 4.5 | Implementation, `/pr`, `/validate-changes` |
+| `reviewer` | subagent | `opencode-go/kimi-k2.6` | Sonnet 4.6 | Code audit, `/review` |
+| `architect` | subagent | `opencode-go/glm-5.1` | Opus 4.8 | Complex design, documentation |
 
-Legacy Gemini model IDs are kept in `_comment_legacy_*` fields in the config file for reference only.
+**Note**: Model IDs differ between OpenCode (opencode-go/*) and Claude Code (Sonnet/Haiku/Opus) — different providers, same roles. Alignment is on names/modes/permissions, not LLM choice.
 
 ### Slash commands
 
-Commands live in [`.ai/commands/`](.ai/commands/). Each file runs its matching skill under [`.ai/skills/`](.ai/skills/):
+Commands defined inline in [`.opencode/opencode.json`](.opencode/opencode.json), referencing flat skill templates under [`.claude/skills/`](.claude/skills/):
 
-| Command | Skill | Agent |
-|---------|-------|--------|
-| `/pr` | `pr-command.md` | `build` |
-| `/review` | `review-command.md` | `reviewer` |
-| `/release` | `release-command.md` | `plan` |
-| `/validate-changes` | `validate-changes-command.md` | `build` |
+| Command | Agent | Skill template |
+|---------|-------|---|
+| `/pr` | builder | `@.claude/skills/pr-command.md` |
+| `/review` | reviewer | `@.claude/skills/review-command.md` |
+| `/release` | planner | `@.claude/skills/release-command.md` |
+| `/validate-changes` | builder | `@.claude/skills/validate-changes-command.md` |
 
 ### Optional agent rules
 
-[`.agents/rules/`](.agents/rules/) (e.g. `antigravity-rtk-rules.md`) is **not** auto-loaded by OpenCode. Follow those files when the workflow or tool requires them (shell/RTK usage, specific IDE agents).
+External tool-specific rules files are **not** auto-loaded by OpenCode or Claude Code. Follow them when the workflow or tool requires them (shell/RTK usage, specific IDE agents).

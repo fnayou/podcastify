@@ -3,9 +3,10 @@
 ## AI & Agent Rules
 
 - **`AGENTS.md`** is the source of truth regarding AI.
-- **`.ai/`** is the directory where all AI files and resources belong (except `AGENTS.md`).
-- The **`.ai/`** directory contains commands, rules, and skills that can be used, updated, and upgraded.
-- **`.agents/rules/*.md`** files are optional tool-specific rules (not listed in `.ai/opencode.json` `instructions`); read and apply them when the task or tool requires it.
+- **`.claude/`** is the directory where all AI files and resources belong (except `AGENTS.md`).
+- The **`.claude/`** directory contains agents, commands, rules, skills, plans, and templates that can be used, updated, and upgraded.
+- **`.opencode/opencode.json`** holds OpenCode-specific tool configuration only and points into `.claude/` for instructions and skills.
+- **External tool-specific rules files** are not auto-loaded; apply them when the task or tool requires it.
 
 ## Code Style
 
@@ -24,7 +25,7 @@ Each time we work on a feature on this project:
 Before creating a plan or writing code, we must thoroughly discuss the feature, clarify requirements, and detail the technical design. During this stage, the agent should actively ask the user any questions necessary to fully understand the feature and its implementation.
 
 ### 2. Plan Mode
-Following discussion, we design and plan the feature. We can plan many features in advance and implement them later. The plan is saved as a markdown file inside the dedicated directory and must be sequentially enumerated: `.ai/plan/001-<slug>.md`, `.ai/plan/002-<slug>.md`, etc.
+Following discussion, we design and plan the feature. We can plan many features in advance and implement them later. The plan is saved as a markdown file inside the dedicated directory and must be sequentially enumerated: `.claude/plan/001-<slug>.md`, `.claude/plan/002-<slug>.md`, etc.
 
 The plan file must follow this structure:
 
@@ -53,7 +54,7 @@ Plan files are local scratch files (gitignored).
 
 ### 3. Build Mode (Implementation)
 When implementing from a plan file:
-1. Read the plan from `.ai/plan/<slug>.md`.
+1. Read the plan from `.claude/plan/<slug>.md`.
 2. Ask the user: "Proceed with the whole plan or step by step?"
    - **Step-by-step**: Execute one task at a time, confirm completion before moving to the next.
    - **Whole plan**: Execute all tasks sequentially.
@@ -65,7 +66,7 @@ When implementing from a plan file:
    d. Verify all tests pass and satisfy all acceptance criteria.
 
 ### 4. Archive Plan
-Once all tasks are completed, the implementation is verified, and the user gives explicit permission/approval, the plan file is archived by moving it to the `archive` subdirectory within the plan directory: `.ai/plan/archive/<slug>.md`.
+Once all tasks are completed, the implementation is verified, and the user gives explicit permission/approval, the plan file is archived by moving it to the `archive` subdirectory within the plan directory: `.claude/plan/archive/<slug>.md`.
 
 ## Project Constraints
 
@@ -83,7 +84,8 @@ Once all tasks are completed, the implementation is verified, and the user gives
 - **GitHub Actions Parity**: Local testing should mimic the GitHub Actions CI workflow wherever possible. This includes running `task dev:test:ci` or `task dev:test:coverage` (for code tests) and verifying the Docker build (`task docker:build:quick` or `task dev:validate`) to ensure the container is stable.
 - All new code must have corresponding tests.
 - Tests use `pytest` + `pytest-mock` for mocking (ffprobe, filesystem).
-- Tests live in `tests/`, one file per class, with fixtures in `tests/conftest.py`.
+- Tests live in `tests/`, organized by module/concern (one file per class **or** per module if it holds multiple classes/functions; helper test files like `test_helpers.py` are OK).
+- Fixtures live in `tests/conftest.py`.
 - Target: 90%+ coverage of `podcastify/`.
 
 ## Git Conventions

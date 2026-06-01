@@ -125,7 +125,9 @@ class TestGetDurationSeconds:
         assert result2 is None
 
     def test_disk_cache_persists(self, mocker, mock_mp3, tmp_path, monkeypatch):
-        monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
+        cache_root = tmp_path / "cache"
+        cache_root.mkdir()
+        monkeypatch.setattr("podcastify.config.Config.CACHE_ROOT", cache_root)
         MediaProcessor.clear_cache()
         proc_mock = mocker.patch(
             "podcastify.media.subprocess.run",
@@ -138,6 +140,56 @@ class TestGetDurationSeconds:
         proc_mock.reset_mock()
         assert MediaProcessor.get_duration_seconds(mock_mp3) == 999.0
         proc_mock.assert_not_called()
+
+    def test_legacy_cache_migration(self, mocker, mock_mp3, tmp_path, monkeypatch):
+        public_root = tmp_path / "public"
+        cache_root = tmp_path / "cache"
+        public_root.mkdir()
+        public_root.mkdir(parents=True, exist_ok=True)
+
+        monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", public_root)
+        monkeypatch.setattr("podcastify.config.Config.CACHE_ROOT", cache_root)
+
+        legacy_cache = public_root / ".podcastify-cache.json"
+        legacy_cache.write_text('{"path|123.45": 567.89}', encoding="utf-8")
+
+        MediaProcessor.clear_cache()
+        proc_mock = mocker.patch(
+            "podcastify.media.subprocess.run",
+            return_value=mocker.Mock(stdout="100.0\n", stderr=""),
+        )
+
+        MediaProcessor._load_disk_cache()
+
+        assert not legacy_cache.exists()
+        new_cache = cache_root / ".podcastify-cache.json"
+        assert new_cache.exists()
+        assert "path|123.45" in new_cache.read_text(encoding="utf-8")
+
+    def test_cache_pruning_removes_nonexistent_files(self, mocker, tmp_path, monkeypatch):
+        cache_root = tmp_path / "cache"
+        cache_root.mkdir()
+        monkeypatch.setattr("podcastify.config.Config.CACHE_ROOT", cache_root)
+
+        MediaProcessor.clear_cache()
+
+        existing_file = tmp_path / "exists.mp3"
+        existing_file.write_bytes(b"\x00" * 1024)
+        nonexistent_file = tmp_path / "missing.mp3"
+
+        key_exists = (str(existing_file), 123.45)
+        key_missing = (str(nonexistent_file), 456.78)
+
+        MediaProcessor._duration_cache[key_exists] = 100.0
+        MediaProcessor._duration_cache[key_missing] = 200.0
+
+        MediaProcessor._save_disk_cache()
+
+        cache_content = cache_root / ".podcastify-cache.json"
+        content = cache_content.read_text(encoding="utf-8")
+
+        assert str(existing_file) in content
+        assert str(nonexistent_file) not in content
 
     def test_warm_durations_parallel(self, mocker, tmp_path):
         MediaProcessor.clear_cache()

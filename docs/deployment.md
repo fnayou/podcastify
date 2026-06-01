@@ -9,7 +9,7 @@ export HOST_PORT=1234
 export PUBLIC_BASE_URL="http://localhost:${HOST_PORT}"
 
 docker run --rm \
-  -e PORT=8080 \
+  -e SERVICE_PORT=8080 \
   -e PUBLIC_BASE_URL="${PUBLIC_BASE_URL}" \
   -p ${HOST_PORT}:8080 \
   -v "$(pwd)/public:/app/public" \
@@ -24,9 +24,9 @@ services:
   podcastify:
     image: fnayou/podcastify:latest
     ports:
-      - "${HOST_PORT:-8080}:${PORT:-8080}"
+      - "${HOST_PORT:-8080}:${SERVICE_PORT:-8080}"
     environment:
-      - PORT=${PORT:-8080}
+      - SERVICE_PORT=${SERVICE_PORT:-8080}
       - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://localhost:${HOST_PORT:-8080}}
       - PODCASTS_ROOT=/app/podcasts
       - PUBLIC_ROOT=/app/public
@@ -42,7 +42,7 @@ Create a `.env` file:
 
 ```env
 HOST_PORT=8080
-PORT=8080
+SERVICE_PORT=8080
 PUBLIC_BASE_URL=http://localhost:${HOST_PORT}
 RUN_ON_START=true
 PUBLISH_XML=true
@@ -53,20 +53,20 @@ PUBLISH_XML=true
 | Variable | Default | Description |
 |---|---|---|
 | `HOST_PORT` | `8080` | Host port exposed to the outside. |
-| `PORT` | `8080` | Container port Caddy listens on. |
+| `SERVICE_PORT` | `8080` | Container port Caddy listens on. |
 | `PUBLIC_BASE_URL` | `http://localhost:8080` | Base URL used in generated enclosure and image links. |
 | `PODCASTS_ROOT` | `/app/podcasts` | In-container path to podcast configs. |
 | `PUBLIC_ROOT` | `/app/public` | In-container path to media and generated feeds. |
 | `RUN_ON_START` | `true` | Run generator on container startup. |
 | `PUBLISH_XML` | `true` | Write XML files to disk. |
-| `OPENCODE_CONFIG` | `.ai/opencode.json` | Path to [OpenCode](https://opencode.ai) config (agents, skills, instructions). Contributor-only; not required to run the container. |
+| `OPENCODE_CONFIG` | `.opencode/opencode.json` | Path to [OpenCode](https://opencode.ai) config (agents, skills, instructions). Contributor-only; not required to run the container. |
 
 ## Reverse Proxy
 
 For production behind a reverse proxy at `https://podcasts.domain.tld`:
 
 1. Set `PUBLIC_BASE_URL=https://podcasts.domain.tld` in `.env`
-2. Forward to the container's `${PORT}` (default 8080)
+2. Forward to the container's `${SERVICE_PORT}` (default 8080)
 
 ### Caddy Example
 
@@ -107,29 +107,32 @@ services:
     cap_drop: ["ALL"]
 ```
 
-These make the root filesystem read-only (mounted `public/` and `podcasts/` remain writable), prevent privilege escalation, and drop Linux capabilities.
-
-If running as a non-root user (future versions):
-
-```yaml
-services:
-  podcastify:
-    user: "10001:10001"
-```
+Root filesystem read-only. Mounted `public/` + `podcasts/` stay writable. Prevents privilege escalation; drops Linux capabilities. Note: generator writes cache + temp files to `PUBLIC_ROOT` — any hardening must keep `public/` writable.
 
 ## Caddyfile
 
-The image ships with a Caddyfile that uses `{$PORT}` and hides `.gitkeep`:
+Shipped Caddyfile uses `{$SERVICE_PORT}` and hides dotfiles:
 
 ```caddy
-:{$PORT} {
+:{$SERVICE_PORT} {
   root * /app/public
   encode gzip
   header Access-Control-Allow-Origin "*"
 
+  @rss path *.xml
+  header @rss Content-Type "application/rss+xml; charset=utf-8"
+  header @rss Cache-Control "public, max-age=300, must-revalidate"
+
+  @mp3 path *.mp3
+  header @mp3 Cache-Control "public, max-age=31536000, immutable"
+  header @mp3 Content-Type "audio/mpeg"
+
+  @images path *.jpg *.jpeg *.png *.webp
+  header @images Cache-Control "public, max-age=86400"
+
   file_server {
     browse
-    hide .gitkeep
+    hide .*
   }
 
   log {
