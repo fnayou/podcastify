@@ -59,7 +59,21 @@ PUBLISH_XML=true
 | `PUBLIC_ROOT` | `/app/public` | In-container path to media and generated feeds. |
 | `RUN_ON_START` | `true` | Run generator on container startup. |
 | `PUBLISH_XML` | `true` | Write XML files to disk. |
+| `LOG_LEVEL` | `INFO` | Logging verbosity: `DEBUG`, `INFO`, `WARNING`, or `ERROR`. |
 | `OPENCODE_CONFIG` | `.opencode/opencode.json` | Path to [OpenCode](https://opencode.ai) config (agents, skills, instructions). Contributor-only; not required to run the container. |
+
+## Log Visibility
+
+The podcastify generator logs at different levels. The visibility depends on how the generator is invoked:
+
+| How generator runs | In `docker compose logs -f`? | Why |
+|---|---|---|
+| Boot, `RUN_ON_START=true` | YES | entrypoint runs generator as PID-1 chain before `exec supervisord`; stdout inherited by container |
+| Caddy / supervisord | YES | `supervisord.conf:10-13` forwards `/dev/stdout`+`/dev/stderr`, `maxbytes=0` |
+| `docker compose exec podcastify python /app/app.py generate` | NO | separate process attached to the exec client's terminal, not PID 1 — prints in your shell |
+| `docker compose run --rm ...` | NO | separate temporary container, its own log stream |
+
+**Note**: On-demand `exec` generation will not show in the main service log stream. Check your shell terminal for the output, or re-run the generator at boot by restarting the container.
 
 ## Reverse Proxy
 

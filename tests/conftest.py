@@ -19,6 +19,9 @@ def reset_env(monkeypatch):
     monkeypatch.setenv("PUBLIC_BASE_URL", "http://localhost:8080")
     monkeypatch.setenv("PUBLISH_XML", "true")
     monkeypatch.setenv("RUN_ON_START", "true")
+    monkeypatch.setenv("LOG_LEVEL", "INFO")
+    from podcastify.logging_config import reset_logger_cache
+    reset_logger_cache()
 
 
 @pytest.fixture

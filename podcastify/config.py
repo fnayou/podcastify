@@ -23,6 +23,7 @@ class Config:
     BASE_URL = _EnvVar("PUBLIC_BASE_URL", "http://localhost:8080")
     PUBLISH_XML = _EnvVar("PUBLISH_XML", "true", lambda v: v.lower() == "true")
     RUN_ON_START = _EnvVar("RUN_ON_START", "true", lambda v: v.lower() == "true")
+    LOG_LEVEL = _EnvVar("LOG_LEVEL", "INFO")
 
     CHANNEL_FIELDS = [
         "name", "title", "author-name", "author-email", "subtitle",

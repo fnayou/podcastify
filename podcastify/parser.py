@@ -7,10 +7,9 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from podcastify.config import Config
+from podcastify.logging_config import get_logger
 
-
-def log(msg: str) -> None:
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}", flush=True)
+logger = get_logger(__name__)
 
 
 def rfc2822_date(dt: datetime) -> str:
@@ -121,7 +120,7 @@ class ConfigurationManager:
             with path.open("r", encoding="utf-8") as f:
                 return yaml.safe_load(f) or {}
         except (yaml.YAMLError, OSError) as e:
-            log(f"[ERROR] Failed to load config {path}: {e}")
+            logger.error(f"Failed to load config {path}: {e}")
             return {}
 
     @staticmethod
@@ -135,7 +134,8 @@ class ConfigurationManager:
     @staticmethod
     def discover_podcast_configs() -> List[Tuple[str, Path]]:
         if not Config.PODCASTS_ROOT.exists():
-            log(f"[WARN] Podcasts directory not found: {Config.PODCASTS_ROOT}")
+            logger.warning(f"Podcasts directory not found: {Config.PODCASTS_ROOT}")
+            logger.debug(f"Podcasts dir scan: {Config.PODCASTS_ROOT} does not exist")
             return []
         configs: List[Tuple[str, Path]] = []
         for cfg in sorted(Config.PODCASTS_ROOT.iterdir()):
@@ -145,8 +145,9 @@ class ConfigurationManager:
             if name.endswith(("-podcast.yaml", "-podcast.yml")):
                 pod_name = _sanitize_name(name.rsplit("-podcast.", 1)[0])
                 if not pod_name:
-                    log(f"[WARN] Skipping invalid podcast name from file: {cfg.name}")
+                    logger.warning(f"Skipping invalid podcast name from file: {cfg.name}")
                     continue
+                logger.debug(f"Found podcast config: {cfg.name}")
                 configs.append((pod_name, cfg))
         return configs
 
@@ -194,6 +195,7 @@ class EpisodeManager:
             return img
         img_path = Config.PUBLIC_ROOT / podcast_name / Path(img).name
         if img_path.exists():
+            logger.debug(f"Resolved image: {img_path.name}")
             return f"{Config.BASE_URL}/{podcast_name}/{img_path.name}"
-        log(f"[WARN] Image file not found: {img_path}")
+        logger.warning(f"Image file not found: {img_path}")
         return None

@@ -12,4 +12,5 @@
 - **`PUBLIC_ROOT` / `PODCASTS_ROOT`**: env-configured base dirs for media+feeds and YAML configs (defaults `/app/public`, `/app/podcasts`).
 - **`RUN_ON_START`**: if true, generator runs once at container boot before Caddy serves content.
 - **`PUBLISH_XML`**: if false, validates/discovers episodes but skips writing `<name>.xml` (dry run).
+- **`LOG_LEVEL`**: env var controlling logging verbosity (`DEBUG`, `INFO`, `WARNING`, `ERROR`). Default `INFO`. Used by stdlib `logging` module; controls what appears in `docker compose logs`.
 - **Channel fields / Episode fields**: whitelisted YAML keys copied into feed metadata — `Config.CHANNEL_FIELDS` / `Config.EPISODE_FIELDS` (`podcastify/config.py:26-36`).

@@ -63,14 +63,13 @@ class TestResolveImageUrl:
         result = EpisodeManager.resolve_image_url("myshow", {"image": "cover.jpg"})
         assert result == "http://localhost:8080/myshow/cover.jpg"
 
-    def test_local_file_missing(self, tmp_path, monkeypatch, capsys):
+    def test_local_file_missing(self, tmp_path, monkeypatch, caplog):
         monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
         pub_dir = tmp_path / "myshow"
         pub_dir.mkdir()
         result = EpisodeManager.resolve_image_url("myshow", {"image": "missing.jpg"})
         assert result is None
-        captured = capsys.readouterr()
-        assert "WARN" in captured.out
+        assert any(record.levelname == "WARNING" for record in caplog.records)
 
     def test_absolute_url(self, tmp_path, monkeypatch):
         monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)

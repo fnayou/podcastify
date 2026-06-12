@@ -34,16 +34,15 @@ class TestProcessPodcast:
         assert ok is True
         assert (tmp_path / "myshow.xml").exists()
 
-    def test_empty_config(self, tmp_path, capsys):
+    def test_empty_config(self, tmp_path, caplog):
         cfg = tmp_path / "empty-podcast.yaml"
         cfg.write_text("", encoding="utf-8")
         proc = PodcastProcessor()
         ok = proc.process_podcast("empty", cfg)
         assert ok is False
-        captured = capsys.readouterr()
-        assert "ERROR" in captured.out
+        assert any(record.levelname == "ERROR" for record in caplog.records)
 
-    def test_validation_failure(self, tmp_path, monkeypatch, capsys):
+    def test_validation_failure(self, tmp_path, monkeypatch, caplog):
         monkeypatch.setattr("podcastify.config.Config.PODCASTS_ROOT", tmp_path)
         monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
         cfg = tmp_path / "bad-podcast.yaml"
@@ -57,10 +56,9 @@ class TestProcessPodcast:
         proc = PodcastProcessor()
         ok = proc.process_podcast("bad", cfg)
         assert ok is False
-        captured = capsys.readouterr()
-        assert "validation" in captured.out.lower()
+        assert any("validation" in record.message.lower() for record in caplog.records)
 
-    def test_missing_public_dir(self, tmp_path, monkeypatch, capsys):
+    def test_missing_public_dir(self, tmp_path, monkeypatch, caplog):
         monkeypatch.setattr("podcastify.config.Config.PODCASTS_ROOT", tmp_path)
         monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
         cfg = tmp_path / "myshow-podcast.yaml"
@@ -71,10 +69,9 @@ class TestProcessPodcast:
         proc = PodcastProcessor()
         ok = proc.process_podcast("myshow", cfg)
         assert ok is False
-        captured = capsys.readouterr()
-        assert "WARN" in captured.out
+        assert any(record.levelname == "WARNING" for record in caplog.records)
 
-    def test_no_episodes(self, tmp_path, monkeypatch, capsys):
+    def test_no_episodes(self, tmp_path, monkeypatch, caplog):
         monkeypatch.setattr("podcastify.config.Config.PODCASTS_ROOT", tmp_path)
         monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
         cfg = tmp_path / "myshow-podcast.yaml"
@@ -94,10 +91,9 @@ class TestProcessPodcast:
         proc = PodcastProcessor()
         ok = proc.process_podcast("myshow", cfg)
         assert ok is False
-        captured = capsys.readouterr()
-        assert "WARN" in captured.out
+        assert any(record.levelname == "WARNING" for record in caplog.records)
 
-    def test_name_mismatch(self, tmp_path, monkeypatch, capsys):
+    def test_name_mismatch(self, tmp_path, monkeypatch, caplog):
         monkeypatch.setattr("podcastify.config.Config.PODCASTS_ROOT", tmp_path)
         monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
         monkeypatch.setattr("podcastify.config.Config.PUBLISH_XML", True)
@@ -120,10 +116,9 @@ class TestProcessPodcast:
         proc = PodcastProcessor()
         ok = proc.process_podcast("myshow", cfg)
         assert ok is True
-        captured = capsys.readouterr()
-        assert "WARN" in captured.out
+        assert any(record.levelname == "WARNING" for record in caplog.records)
 
-    def test_publish_xml_false(self, tmp_path, monkeypatch, capsys):
+    def test_publish_xml_false(self, tmp_path, monkeypatch, caplog):
         monkeypatch.setattr("podcastify.config.Config.PODCASTS_ROOT", tmp_path)
         monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
         monkeypatch.setattr("podcastify.config.Config.PUBLISH_XML", False)
@@ -146,18 +141,16 @@ class TestProcessPodcast:
         ok = proc.process_podcast("myshow", cfg)
         assert ok is True
         assert not (tmp_path / "myshow.xml").exists()
-        captured = capsys.readouterr()
-        assert "Validated" in captured.out
+        assert any("Validated" in record.message for record in caplog.records)
 
 
 class TestProcessAllPodcasts:
-    def test_empty(self, tmp_path, monkeypatch, capsys):
+    def test_empty(self, tmp_path, monkeypatch, caplog):
         monkeypatch.setattr("podcastify.config.Config.PODCASTS_ROOT", tmp_path)
         proc = PodcastProcessor()
         count = proc.process_all_podcasts()
         assert count == 0
-        captured = capsys.readouterr()
-        assert "INFO" in captured.out
+        assert any(record.levelname == "INFO" for record in caplog.records)
 
     def test_multiple(self, tmp_path, monkeypatch):
         monkeypatch.setattr("podcastify.config.Config.PODCASTS_ROOT", tmp_path)
@@ -201,7 +194,7 @@ class TestProcessAllPodcasts:
         assert (tmp_path / "one.xml").exists()
         assert (tmp_path / "two.xml").exists()
 
-    def test_partial_failure(self, tmp_path, monkeypatch, capsys):
+    def test_partial_failure(self, tmp_path, monkeypatch, caplog):
         monkeypatch.setattr("podcastify.config.Config.PODCASTS_ROOT", tmp_path)
         monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
         monkeypatch.setattr("podcastify.config.Config.PUBLISH_XML", True)
@@ -230,5 +223,4 @@ class TestProcessAllPodcasts:
         proc = PodcastProcessor()
         count = proc.process_all_podcasts()
         assert count == 1
-        captured = capsys.readouterr()
-        assert "1/2 successful" in captured.out
+        assert any("1/2 successful" in record.message for record in caplog.records)

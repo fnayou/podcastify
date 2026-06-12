@@ -17,6 +17,7 @@ services:
       - CACHE_ROOT=${CACHE_ROOT:-/app/.cache}
       - RUN_ON_START=${RUN_ON_START:-true}
       - PUBLISH_XML=${PUBLISH_XML:-true}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
 
     volumes:
       - ./public:/app/public:rw

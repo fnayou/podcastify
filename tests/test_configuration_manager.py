@@ -22,19 +22,21 @@ class TestLoadYaml:
         result = ConfigurationManager.load_yaml(f)
         assert result == {}
 
-    def test_load_invalid_yaml(self, tmp_path, capsys):
+    def test_load_invalid_yaml(self, tmp_path, caplog):
+        import logging
+        caplog.set_level(logging.DEBUG)
         f = tmp_path / "bad.yaml"
         f.write_text("{[", encoding="utf-8")
         result = ConfigurationManager.load_yaml(f)
         assert result == {}
-        captured = capsys.readouterr()
-        assert "ERROR" in captured.out
+        assert any(record.levelname == "ERROR" for record in caplog.records)
 
-    def test_load_missing_file(self, capsys):
+    def test_load_missing_file(self, caplog):
+        import logging
+        caplog.set_level(logging.DEBUG)
         result = ConfigurationManager.load_yaml(Path("/nonexistent/file.yaml"))
         assert result == {}
-        captured = capsys.readouterr()
-        assert "ERROR" in captured.out
+        assert any(record.levelname == "ERROR" for record in caplog.records)
 
 
 class TestExtractPodcastMetadata:
@@ -83,13 +85,12 @@ class TestDiscoverPodcastConfigs:
         result = ConfigurationManager.discover_podcast_configs()
         assert result == []
 
-    def test_missing_directory(self, tmp_path, monkeypatch, capsys):
+    def test_missing_directory(self, tmp_path, monkeypatch, caplog):
         missing = tmp_path / "missing"
         monkeypatch.setattr("podcastify.config.Config.PODCASTS_ROOT", missing)
         result = ConfigurationManager.discover_podcast_configs()
         assert result == []
-        captured = capsys.readouterr()
-        assert "WARN" in captured.out
+        assert any(record.levelname == "WARNING" for record in caplog.records)
 
     def test_skips_directories(self, tmp_path, monkeypatch):
         monkeypatch.setattr("podcastify.config.Config.PODCASTS_ROOT", tmp_path)
@@ -107,10 +108,9 @@ class TestDiscoverPodcastConfigs:
         assert "myshow" in names  # dots removed
         assert "other" in names
 
-    def test_skips_empty_name_after_sanitize(self, tmp_path, monkeypatch, capsys):
+    def test_skips_empty_name_after_sanitize(self, tmp_path, monkeypatch, caplog):
         monkeypatch.setattr("podcastify.config.Config.PODCASTS_ROOT", tmp_path)
         (tmp_path / "..-podcast.yaml").write_text("name: empty", encoding="utf-8")
         result = ConfigurationManager.discover_podcast_configs()
         assert result == []
-        captured = capsys.readouterr()
-        assert "WARN" in captured.out
+        assert any(record.levelname == "WARNING" for record in caplog.records)

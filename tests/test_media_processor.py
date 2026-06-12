@@ -214,8 +214,10 @@ class TestGetDurationSeconds:
         result = MediaProcessor.get_duration_seconds(zero_byte)
         assert result is None
 
-    def test_called_process_error_logs_stderr(self, mocker, mock_mp3, tmp_path, monkeypatch):
+    def test_called_process_error_logs_stderr(self, mocker, mock_mp3, tmp_path, monkeypatch, caplog):
         """CalledProcessError should log the stderr message."""
+        import logging
+        caplog.set_level(logging.DEBUG)
         cache_root = tmp_path / "cache"
         cache_root.mkdir()
         monkeypatch.setattr("podcastify.config.Config.CACHE_ROOT", cache_root)
@@ -226,16 +228,15 @@ class TestGetDurationSeconds:
             "podcastify.media.subprocess.run",
             side_effect=error,
         )
-        log_mock = mocker.patch("podcastify.media.log")
         result = MediaProcessor.get_duration_seconds(mock_mp3)
         assert result is None
-        log_mock.assert_called_once()
-        call_args = log_mock.call_args[0][0]
-        assert "Invalid data found when processing input" in call_args
-        assert "exit 1" in call_args
+        assert any("Invalid data found when processing input" in record.message for record in caplog.records)
+        assert any("exit 1" in record.message for record in caplog.records)
 
-    def test_called_process_error_with_empty_stderr(self, mocker, mock_mp3, tmp_path, monkeypatch):
+    def test_called_process_error_with_empty_stderr(self, mocker, mock_mp3, tmp_path, monkeypatch, caplog):
         """CalledProcessError with empty stderr should log placeholder."""
+        import logging
+        caplog.set_level(logging.DEBUG)
         cache_root = tmp_path / "cache"
         cache_root.mkdir()
         monkeypatch.setattr("podcastify.config.Config.CACHE_ROOT", cache_root)
@@ -246,12 +247,9 @@ class TestGetDurationSeconds:
             "podcastify.media.subprocess.run",
             side_effect=error,
         )
-        log_mock = mocker.patch("podcastify.media.log")
         result = MediaProcessor.get_duration_seconds(mock_mp3)
         assert result is None
-        log_mock.assert_called_once()
-        call_args = log_mock.call_args[0][0]
-        assert "<no stderr>" in call_args
+        assert any("<no stderr>" in record.message for record in caplog.records)
 
     def test_stream_fallback_on_empty_format_duration(self, mocker, mock_mp3):
         """When format=duration is empty, fallback to stream=duration."""
@@ -267,8 +265,10 @@ class TestGetDurationSeconds:
         result = MediaProcessor.get_duration_seconds(mock_mp3)
         assert result == 1234.5
 
-    def test_stream_fallback_failure_returns_none(self, mocker, mock_mp3, tmp_path, monkeypatch):
+    def test_stream_fallback_failure_returns_none(self, mocker, mock_mp3, tmp_path, monkeypatch, caplog):
         """When both format and stream durations fail, return None."""
+        import logging
+        caplog.set_level(logging.DEBUG)
         cache_root = tmp_path / "cache"
         cache_root.mkdir()
         monkeypatch.setattr("podcastify.config.Config.CACHE_ROOT", cache_root)
@@ -281,14 +281,10 @@ class TestGetDurationSeconds:
                 subprocess.CalledProcessError(1, "ffprobe"),
             ],
         )
-        log_mock = mocker.patch("podcastify.media.log")
         result = MediaProcessor.get_duration_seconds(mock_mp3)
         assert result is None
-        # Should log <no duration data> message
-        log_mock.assert_called_once()
-        call_args = log_mock.call_args[0][0]
-        assert "<no duration data>" in call_args
-        assert "<exit 1> ffprobe: <no stderr>" in call_args
+        assert any("<no duration data>" in record.message for record in caplog.records)
+        assert any("<exit 1> ffprobe: <no stderr>" in record.message for record in caplog.records)
 
     def test_stream_fallback_caches_success(self, mocker, mock_mp3):
         """Stream fallback result should be cached."""
@@ -311,8 +307,10 @@ class TestGetDurationSeconds:
         assert result2 == 999.0
         proc_mock.assert_not_called()
 
-    def test_stream_fallback_value_error_returns_none(self, mocker, mock_mp3, tmp_path, monkeypatch):
+    def test_stream_fallback_value_error_returns_none(self, mocker, mock_mp3, tmp_path, monkeypatch, caplog):
         """Malformed stream-duration string (ValueError) is folded into the final WARN."""
+        import logging
+        caplog.set_level(logging.DEBUG)
         cache_root = tmp_path / "cache"
         cache_root.mkdir()
         monkeypatch.setattr("podcastify.config.Config.CACHE_ROOT", cache_root)
@@ -324,13 +322,10 @@ class TestGetDurationSeconds:
                 mocker.Mock(stdout="N/A\n", stderr=""),
             ],
         )
-        log_mock = mocker.patch("podcastify.media.log")
         result = MediaProcessor.get_duration_seconds(mock_mp3)
         assert result is None
-        log_mock.assert_called_once()
-        call_args = log_mock.call_args[0][0]
-        assert "<no duration data>" in call_args
-        assert "could not convert string to float" in call_args
+        assert any("<no duration data>" in record.message for record in caplog.records)
+        assert any("could not convert string to float" in record.message for record in caplog.records)
 
     def test_stream_fallback_success_persists_to_disk(self, mocker, mock_mp3, tmp_path, monkeypatch):
         """A successfully-resolved fallback duration is written to the on-disk cache."""
