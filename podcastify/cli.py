@@ -128,6 +128,9 @@ class PodcastProcessor:
                 try:
                     with os.fdopen(fd, "w", encoding="utf-8") as f:
                         f.write(xml)
+                    # mkstemp creates 0600; feeds are public static files served
+                    # by Caddy, so make them world-readable.
+                    os.chmod(tmp, 0o644)
                     os.replace(tmp, str(out))
                 except Exception:
                     os.unlink(tmp)

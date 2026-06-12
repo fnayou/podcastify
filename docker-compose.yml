@@ -18,7 +18,12 @@ services:
       - RUN_ON_START=${RUN_ON_START:-true}
       - PUBLISH_XML=${PUBLISH_XML:-true}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      # Set to the uid/gid that owns the bind-mounts below so generated
+      # files aren't written as root. Defaults to 1000.
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
 
     volumes:
       - ./public:/app/public:rw
       - ./podcasts:/app/podcasts:rw
+      - ./cache:/app/.cache:rw
