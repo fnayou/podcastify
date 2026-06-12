@@ -78,6 +78,24 @@ task docker:logs:errors
 task docker:shell
 ```
 
+### Enable Debug Logging
+
+To increase verbosity and see detailed trace information (config discovery, episode probing, cache operations, ffprobe invocations):
+
+```bash
+# At boot
+LOG_LEVEL=DEBUG docker compose up
+
+# On-demand generate
+docker compose exec -e LOG_LEVEL=DEBUG podcastify python /app/app.py generate
+
+# Or in .env
+LOG_LEVEL=DEBUG
+docker compose up
+```
+
+Valid levels are `DEBUG`, `INFO` (default), `WARNING`, and `ERROR`. Debug output appears in `docker compose logs` and is useful for verifying the app is working correctly.
+
 ## Task Doctor
 
 Run `task doctor` for a quick environment check.

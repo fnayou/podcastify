@@ -6,7 +6,6 @@ from podcastify.parser import (
     EpisodeManager,
     _coerce_bool,
     _sanitize_name,
-    log,
     rfc2822_date,
     validate_podcast_config,
 )
@@ -20,7 +19,6 @@ __all__ = [
     "RSSGenerator",
     "PodcastProcessor",
     "main",
-    "log",
     "rfc2822_date",
     "_coerce_bool",
     "_sanitize_name",

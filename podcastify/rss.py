@@ -6,13 +6,15 @@ from typing import Any, Dict, List, Optional, Union
 from xml.sax.saxutils import escape
 
 from podcastify.config import Config
+from podcastify.logging_config import get_logger
 from podcastify.media import MediaProcessor
 from podcastify.parser import (
     EpisodeManager,
     _coerce_bool,
-    log,
     rfc2822_date,
 )
+
+logger = get_logger(__name__)
 
 
 class RSSGenerator:
@@ -70,9 +72,13 @@ class RSSGenerator:
     def generate_feed_xml(
         self, podcast_name: str, metadata: Dict[str, Any], episodes: List[Dict[str, Any]]
     ) -> str:
+        logger.debug(f"Render channel: {podcast_name}")
         now = rfc2822_date(datetime.now(timezone.utc))
         channel_xml = self._build_channel_metadata(podcast_name, metadata, now)
-        items_xml = [self._build_episode_item(podcast_name, e, metadata) for e in episodes]
+        items_xml = []
+        for e in episodes:
+            logger.debug(f"Build episode item: {e.get('file', 'unknown')}")
+            items_xml.append(self._build_episode_item(podcast_name, e, metadata))
         return f"""<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
   <channel>
@@ -172,8 +178,9 @@ class RSSGenerator:
         if pub_str:
             try:
                 pub_dt = datetime.fromisoformat(pub_str.replace("Z", "+00:00"))
+                logger.debug(f"Parse pub_date: {fname} -> {pub_dt}")
             except (ValueError, AttributeError):
-                log(f"[WARN] Invalid pub_date for {fname}: {pub_str}")
+                logger.warning(f"Invalid pub_date for {fname}: {pub_str}")
                 pub_dt = datetime.fromtimestamp(
                     stat_result.st_mtime if stat_result else 0, tz=timezone.utc
                 )

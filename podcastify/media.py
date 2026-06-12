@@ -5,7 +5,9 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from podcastify.config import Config
-from podcastify.parser import log
+from podcastify.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 class MediaProcessor:
@@ -42,7 +44,7 @@ class MediaProcessor:
                         except ValueError:
                             continue
         except (OSError, json.JSONDecodeError) as e:
-            log(f"[WARN] Failed to load duration cache: {e}")
+            logger.warning(f"Failed to load duration cache: {e}")
 
     @classmethod
     def _migrate_legacy_cache(cls) -> None:
@@ -57,9 +59,10 @@ class MediaProcessor:
                     new_path.parent.mkdir(parents=True, exist_ok=True)
                     new_path.write_text(json.dumps(legacy_data), encoding="utf-8")
                     legacy_path.unlink()
-                    log(f"[INFO] Migrated cache from {legacy_path} to {new_path}")
+                    logger.info(f"Migrated cache from {legacy_path} to {new_path}")
+                    logger.debug(f"Cache migration: {len(legacy_data)} entries moved")
             except (OSError, json.JSONDecodeError) as e:
-                log(f"[WARN] Failed to migrate legacy cache: {e}")
+                logger.warning(f"Failed to migrate legacy cache: {e}")
 
     @classmethod
     def _save_disk_cache(cls) -> None:
@@ -72,8 +75,9 @@ class MediaProcessor:
                 if file_path.exists():
                     serializable[cls._cache_key(file_path, k[1])] = v
             path.write_text(json.dumps(serializable), encoding="utf-8")
+            logger.debug(f"Cache save: {len(serializable)} entries written to {path}")
         except OSError as e:
-            log(f"[WARN] Failed to save duration cache: {e}")
+            logger.warning(f"Failed to save duration cache: {e}")
 
     @classmethod
     def clear_cache(cls) -> None:
@@ -110,45 +114,49 @@ class MediaProcessor:
         key = (str(mp3_path), mtime)
         cls._load_disk_cache()
         if key in cls._duration_cache:
-            return cls._duration_cache[key]
+            cached = cls._duration_cache[key]
+            logger.debug(f"Cache hit: {mp3_path.name} -> {cached}s")
+            return cached
 
         # Short-circuit zero-byte files
         try:
             file_size = mp3_path.stat().st_size
         except (OSError, FileNotFoundError):
-            log(f"[WARN] Failed to get duration for {mp3_path.name}: <size check failed>")
+            logger.warning(f"Failed to get duration for {mp3_path.name}: <size check failed>")
             return cls._cache_failure(key)
 
         if file_size == 0:
-            log(f"[WARN] Failed to get duration for {mp3_path.name}: <zero-byte file>")
+            logger.warning(f"Failed to get duration for {mp3_path.name}: <zero-byte file>")
             return cls._cache_failure(key)
 
         try:
+            logger.debug(f"ffprobe invocation: {mp3_path.name}")
             result = cls._run_ffprobe(mp3_path, ["-show_entries", "format=duration"])
             dur_str = result.stdout.strip()
             if not dur_str:
-                # format=duration is empty, try stream-level fallback
                 dur, fallback_reason = cls._try_stream_duration_fallback(mp3_path)
                 if dur is not None:
                     cls._duration_cache[key] = dur
                     cls._save_disk_cache()
+                    logger.debug(f"Resolved duration (stream fallback): {mp3_path.name} -> {dur}s")
                     return dur
                 reason = fallback_reason or "<no duration data>"
-                log(f"[WARN] Failed to get duration for {mp3_path.name}: <no duration data> ({reason})")
+                logger.warning(f"Failed to get duration for {mp3_path.name}: <no duration data> ({reason})")
                 return cls._cache_failure(key)
             dur = float(dur_str)
             cls._duration_cache[key] = dur
             cls._save_disk_cache()
+            logger.debug(f"Resolved duration: {mp3_path.name} -> {dur}s")
             return dur
         except subprocess.CalledProcessError as e:
             stderr_msg = e.stderr.strip() if e.stderr else "<no stderr>"
-            log(f"[WARN] Failed to get duration for {mp3_path.name}: <exit {e.returncode}> ffprobe: {stderr_msg}")
+            logger.warning(f"Failed to get duration for {mp3_path.name}: <exit {e.returncode}> ffprobe: {stderr_msg}")
             return cls._cache_failure(key)
         except subprocess.TimeoutExpired as e:
-            log(f"[WARN] Failed to get duration for {mp3_path.name}: {e}")
+            logger.warning(f"Failed to get duration for {mp3_path.name}: {e}")
             return cls._cache_failure(key)
         except ValueError as e:
-            log(f"[WARN] Failed to get duration for {mp3_path.name}: {e}")
+            logger.warning(f"Failed to get duration for {mp3_path.name}: {e}")
             return cls._cache_failure(key)
 
     @classmethod
