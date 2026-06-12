@@ -1,26 +1,26 @@
 :{$SERVICE_PORT} {
-  root * /app/public
-  encode gzip
-  header Access-Control-Allow-Origin "*"
+	root * /app/public
+	encode gzip
+	header Access-Control-Allow-Origin "*"
 
-  @rss path *.xml
-  header @rss Content-Type "application/rss+xml; charset=utf-8"
-  header @rss Cache-Control "public, max-age=300, must-revalidate"
+	@rss path *.xml
+	header @rss Content-Type "application/rss+xml; charset=utf-8"
+	header @rss Cache-Control "public, max-age=300, must-revalidate"
 
-  @mp3 path *.mp3
-  header @mp3 Cache-Control "public, max-age=31536000, immutable"
-  header @mp3 Content-Type "audio/mpeg"
+	@mp3 path *.mp3
+	header @mp3 Cache-Control "public, max-age=31536000, immutable"
+	header @mp3 Content-Type "audio/mpeg"
 
-  @images path *.jpg *.jpeg *.png *.webp
-  header @images Cache-Control "public, max-age=86400"
+	@images path *.jpg *.jpeg *.png *.webp
+	header @images Cache-Control "public, max-age=86400"
 
-  file_server {
-    browse
-    hide .*
-  }
+	file_server {
+		browse
+		hide .*
+	}
 
-  log {
-    output stdout
-    format console
-  }
+	log {
+		output stdout
+		format console
+	}
 }
