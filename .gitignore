@@ -17,8 +17,28 @@ venv/
 .idea/
 .vscode/
 
+# AI plan files (local scratch)
+.claude/plan/*.md
+!.claude/plan/.gitkeep
+!.claude/plan/archive/*
+
+# AI-generated PR summaries (local scratch)
+.pr/
+
+# Duration cache (local)
+.podcastify-cache.json
+
 # Docker artifacts (optional)
 docker-data/
+
+# Test / coverage
+.coverage
+htmlcov/
+.pytest_cache/
+.coverage.*
+*.egg-info/
+dist/
+build/
 
 # Keep folders, ignore their contents
 podcasts/*
@@ -26,3 +46,4 @@ podcasts/*
 
 public/*
 !public/.gitkeep
+.ropeproject/

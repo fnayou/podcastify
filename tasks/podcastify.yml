@@ -1,0 +1,95 @@
+version: "3"
+
+tasks:
+  setup:dirs:
+    desc: Ensure podcasts/ and public/ directories exist
+    silent: true
+    cmds:
+      - mkdir -p {{.PODCASTS_DIR}} {{.PUBLIC_DIR}}
+
+  generate:
+    desc: Generate RSS feeds (running or stopped container)
+    silent: true
+    cmds:
+      - |
+        echo "Generating RSS feeds..."
+        if [ -n "$({{.COMPOSE}} ps -q {{.SERVICE_NAME}})" ]; then
+          echo "Using running container."
+          {{.COMPOSE}} exec {{.SERVICE_NAME}} python {{.APP_SCRIPT}} generate
+        else
+          echo "Starting temporary container."
+          {{.COMPOSE}} run --rm --entrypoint '' {{.SERVICE_NAME}} python {{.APP_SCRIPT}} generate
+        fi
+        echo "RSS generation completed."
+
+  generate:silent:
+    desc: Generate feeds silently (internal)
+    silent: true
+    internal: true
+    cmds:
+      - |
+        if [ -n "$({{.COMPOSE}} ps -q {{.SERVICE_NAME}})" ]; then
+          {{.COMPOSE}} exec {{.SERVICE_NAME}} python {{.APP_SCRIPT}} generate
+        else
+          {{.COMPOSE}} run --rm --entrypoint '' {{.SERVICE_NAME}} python {{.APP_SCRIPT}} generate
+        fi
+
+  watch:
+    desc: Watch podcasts/ and auto-regenerate (Linux, inotifywait)
+    interactive: true
+    deps: [setup:dirs]
+    cmds:
+      - |
+        if ! command -v inotifywait >/dev/null 2>&1; then
+          echo "inotifywait not found. Install inotify-tools."
+          exit 1
+        fi
+        echo "Watching {{.PODCASTS_DIR}} for changes (Ctrl+C to stop)..."
+        while inotifywait -e modify,create,delete,move -r "{{.PODCASTS_DIR}}"; do
+          echo "Change detected, regenerating feeds..."
+          task podcastify:generate:silent
+        done
+
+  watch-public:
+    desc: Watch public/ media and auto-regenerate (Linux, inotifywait)
+    interactive: true
+    deps: [setup:dirs]
+    cmds:
+      - |
+        if ! command -v inotifywait >/dev/null 2>&1; then
+          echo "inotifywait not found. Install inotify-tools."
+          exit 1
+        fi
+        echo "Watching {{.PUBLIC_DIR}} for changes (Ctrl+C to stop)..."
+        while inotifywait -e modify,create,delete,move -r "{{.PUBLIC_DIR}}"; do
+          echo "Media change detected, regenerating feeds..."
+          task podcastify:generate:silent
+        done
+
+  clean:feeds:
+    desc: Remove generated RSS feeds (keeps media files)
+    silent: true
+    cmds:
+      - echo "Cleaning generated RSS feeds..."
+      - rm -f {{.PUBLIC_DIR}}/*.xml
+      - echo "RSS feeds cleaned."
+
+  new:
+    desc: "Scaffold config from template (task podcastify:new NAME=myshow)"
+    silent: true
+    vars:
+      NAME: '{{.NAME | default "example"}}'
+      TEMPLATE: .claude/templates/podcast-config-template.yaml
+    cmds:
+      - |
+        target="{{.PODCASTS_DIR}}/{{.NAME}}-podcast.yaml"
+        if [ -f "$target" ]; then
+          echo "Already exists: $target"
+          exit 1
+        fi
+        mkdir -p "{{.PODCASTS_DIR}}"
+        sed -e 's/myshow/{{.NAME}}/g' \
+            -e 's/My Private Show/{{.NAME | title }} Podcast/g' \
+            "{{.TEMPLATE}}" > "$target"
+        echo "Created: $target"
+        echo "Put media under: {{.PUBLIC_DIR}}/{{.NAME}}/"
