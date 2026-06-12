@@ -1,5 +1,6 @@
 import json
 import subprocess
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -13,6 +14,9 @@ logger = get_logger(__name__)
 class MediaProcessor:
     _duration_cache: Dict[Tuple[str, float], Optional[float]] = {}
     _disk_loaded = False
+    # Guards _duration_cache against concurrent mutation/iteration when
+    # warm_durations_parallel runs probes across a ThreadPoolExecutor.
+    _lock = threading.Lock()
 
     @classmethod
     def _cache_path(cls) -> Path:
@@ -26,25 +30,29 @@ class MediaProcessor:
     def _load_disk_cache(cls) -> None:
         if cls._disk_loaded:
             return
-        cls._disk_loaded = True
+        with cls._lock:
+            # Double-checked under the lock: parallel probes all call this.
+            if cls._disk_loaded:
+                return
+            cls._disk_loaded = True
 
-        cls._migrate_legacy_cache()
+            cls._migrate_legacy_cache()
 
-        path = cls._cache_path()
-        if not path.exists():
-            return
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-            if isinstance(data, dict):
-                for key, val in data.items():
-                    parts = key.rsplit("|", 1)
-                    if len(parts) == 2:
-                        try:
-                            cls._duration_cache[(parts[0], float(parts[1]))] = val
-                        except ValueError:
-                            continue
-        except (OSError, json.JSONDecodeError) as e:
-            logger.warning(f"Failed to load duration cache: {e}")
+            path = cls._cache_path()
+            if not path.exists():
+                return
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+                if isinstance(data, dict):
+                    for key, val in data.items():
+                        parts = key.rsplit("|", 1)
+                        if len(parts) == 2:
+                            try:
+                                cls._duration_cache[(parts[0], float(parts[1]))] = val
+                            except ValueError:
+                                continue
+            except (OSError, json.JSONDecodeError) as e:
+                logger.warning(f"Failed to load duration cache: {e}")
 
     @classmethod
     def _migrate_legacy_cache(cls) -> None:
@@ -67,14 +75,21 @@ class MediaProcessor:
     @classmethod
     def _save_disk_cache(cls) -> None:
         path = cls._cache_path()
+        # Snapshot under the lock so a concurrent probe inserting a key cannot
+        # trigger "dictionary changed size during iteration".
+        with cls._lock:
+            items = list(cls._duration_cache.items())
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
             serializable = {}
-            for k, v in cls._duration_cache.items():
+            for k, v in items:
                 file_path = Path(k[0])
                 if file_path.exists():
                     serializable[cls._cache_key(file_path, k[1])] = v
-            path.write_text(json.dumps(serializable), encoding="utf-8")
+            # Atomic write: avoids a half-written cache if multiple saves race.
+            tmp = path.with_suffix(path.suffix + ".tmp")
+            tmp.write_text(json.dumps(serializable), encoding="utf-8")
+            tmp.replace(path)
             logger.debug(f"Cache save: {len(serializable)} entries written to {path}")
         except OSError as e:
             logger.warning(f"Failed to save duration cache: {e}")
@@ -88,9 +103,11 @@ class MediaProcessor:
             path.unlink(missing_ok=True)
 
     @classmethod
-    def _cache_failure(cls, key: Tuple[str, float]) -> None:
-        cls._duration_cache[key] = None
-        cls._save_disk_cache()
+    def _cache_failure(cls, key: Tuple[str, float], persist: bool = True) -> None:
+        with cls._lock:
+            cls._duration_cache[key] = None
+        if persist:
+            cls._save_disk_cache()
         return None
 
     @classmethod
@@ -104,7 +121,7 @@ class MediaProcessor:
         )
 
     @classmethod
-    def get_duration_seconds(cls, mp3_path: Path) -> Optional[float]:
+    def get_duration_seconds(cls, mp3_path: Path, persist: bool = True) -> Optional[float]:
         if not mp3_path.exists():
             return None
         try:
@@ -123,11 +140,11 @@ class MediaProcessor:
             file_size = mp3_path.stat().st_size
         except (OSError, FileNotFoundError):
             logger.warning(f"Failed to get duration for {mp3_path.name}: <size check failed>")
-            return cls._cache_failure(key)
+            return cls._cache_failure(key, persist=persist)
 
         if file_size == 0:
             logger.warning(f"Failed to get duration for {mp3_path.name}: <zero-byte file>")
-            return cls._cache_failure(key)
+            return cls._cache_failure(key, persist=persist)
 
         try:
             logger.debug(f"ffprobe invocation: {mp3_path.name}")
@@ -136,28 +153,32 @@ class MediaProcessor:
             if not dur_str:
                 dur, fallback_reason = cls._try_stream_duration_fallback(mp3_path)
                 if dur is not None:
-                    cls._duration_cache[key] = dur
-                    cls._save_disk_cache()
+                    with cls._lock:
+                        cls._duration_cache[key] = dur
+                    if persist:
+                        cls._save_disk_cache()
                     logger.debug(f"Resolved duration (stream fallback): {mp3_path.name} -> {dur}s")
                     return dur
                 reason = fallback_reason or "<no duration data>"
                 logger.warning(f"Failed to get duration for {mp3_path.name}: <no duration data> ({reason})")
-                return cls._cache_failure(key)
+                return cls._cache_failure(key, persist=persist)
             dur = float(dur_str)
-            cls._duration_cache[key] = dur
-            cls._save_disk_cache()
+            with cls._lock:
+                cls._duration_cache[key] = dur
+            if persist:
+                cls._save_disk_cache()
             logger.debug(f"Resolved duration: {mp3_path.name} -> {dur}s")
             return dur
         except subprocess.CalledProcessError as e:
             stderr_msg = e.stderr.strip() if e.stderr else "<no stderr>"
             logger.warning(f"Failed to get duration for {mp3_path.name}: <exit {e.returncode}> ffprobe: {stderr_msg}")
-            return cls._cache_failure(key)
+            return cls._cache_failure(key, persist=persist)
         except subprocess.TimeoutExpired as e:
             logger.warning(f"Failed to get duration for {mp3_path.name}: {e}")
-            return cls._cache_failure(key)
+            return cls._cache_failure(key, persist=persist)
         except ValueError as e:
             logger.warning(f"Failed to get duration for {mp3_path.name}: {e}")
-            return cls._cache_failure(key)
+            return cls._cache_failure(key, persist=persist)
 
     @classmethod
     def _try_stream_duration_fallback(cls, mp3_path: Path) -> Tuple[Optional[float], Optional[str]]:
@@ -203,12 +224,16 @@ class MediaProcessor:
         if not need_probe:
             return
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # persist=False: workers only mutate the in-memory cache (under the
+            # lock). The disk cache is written once below, after all probes join,
+            # instead of N times mid-flight (was O(N^2) writes + the race window).
             futures = {
-                executor.submit(cls.get_duration_seconds, p): p
+                executor.submit(cls.get_duration_seconds, p, persist=False): p
                 for p in need_probe
             }
             for future in as_completed(futures):
                 future.result()
+        cls._save_disk_cache()
 
     @staticmethod
     def format_itunes_duration(seconds: Optional[float]) -> Optional[str]:

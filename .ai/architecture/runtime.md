@@ -10,7 +10,7 @@ Since the base image `python:3.12-alpine3.22` already pins the Alpine version an
 
 ### Decision
 
-- **Caddy, ffmpeg, supervisor, tini, ca-certificates**: Not pinned to specific patch revisions.
+- **Caddy, ffmpeg, tini, su-exec, ca-certificates**: Not pinned to specific patch revisions.
 - **Rationale**: The base image `python:3.12-alpine3.22` provides sufficient reproducibility for development and deployment. In production, users should run specific image digests (via `docker pull image@sha256:...`) rather than tags to ensure exact reproducibility.
 - **Alternative**: If reproducibility across releases becomes critical, maintain a separate `alpine.versions.lock` file and use a more sophisticated build process (e.g., a shell script to query apk repos and pin available versions).
 
@@ -22,15 +22,34 @@ Since the base image `python:3.12-alpine3.22` already pins the Alpine version an
 
 ## Process Management
 
-### Tini as PID 1
+### Tini as PID 1, Caddy in the foreground
 
-The entrypoint script invokes `tini` as PID 1:
+Caddy is the only long-running process (the generator runs once at boot), so it
+runs in the foreground under `tini` — no supervisor. The entrypoint invokes
+`tini` as PID 1:
 
 ```bash
-exec /sbin/tini -- /usr/bin/supervisord -c /etc/supervisord.conf
+exec /sbin/tini -- $RUNAS caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
 ```
 
-This ensures zombie process cleanup when ffprobe (spawned by MediaProcessor) exits, preventing resource leaks in long-running container scenarios.
+`tini` ensures zombie process cleanup when ffprobe (spawned by MediaProcessor)
+exits, preventing resource leaks in long-running container scenarios.
+
+### Non-root via PUID/PGID
+
+The image supports two runtimes (see `entrypoint.sh`):
+
+- **Root start (default/convenience):** the entrypoint chowns the writable dirs
+  to `PUID`/`PGID` (default `1000`) and drops privileges with `su-exec`. Adapts
+  to any host bind-mount owner (NAS/desktop). `$RUNAS` = `su-exec <uid>:<gid>`.
+- **Non-root start (hardened):** when the operator pins the container `user:`,
+  the entrypoint skips chown/`su-exec` and runs directly. This is compatible
+  with `cap_drop: ALL` + `read_only` because no privileged ops are performed —
+  the bind-mounts must already be owned by that uid. `$RUNAS` is empty.
+
+Caddy data/config are relocated under `XDG_DATA_HOME`/`XDG_CONFIG_HOME`
+(`/app/.cache/caddy`, on the cache volume) so nothing is written to the
+read-only root filesystem.
 
 ## Healthcheck
 
