@@ -204,3 +204,99 @@ class TestGetDurationSeconds:
         )
         MediaProcessor.warm_durations_parallel(paths, max_workers=2)
         assert proc_mock.call_count == 3
+
+    def test_zero_byte_file_returns_none(self, mock_mp3):
+        """Zero-byte file should return None without calling ffprobe."""
+        MediaProcessor.clear_cache()
+        # Create a zero-byte file
+        zero_byte = mock_mp3.parent / "zero.mp3"
+        zero_byte.write_bytes(b"")
+        result = MediaProcessor.get_duration_seconds(zero_byte)
+        assert result is None
+
+    def test_called_process_error_logs_stderr(self, mocker, mock_mp3):
+        """CalledProcessError should log the stderr message."""
+        MediaProcessor.clear_cache()
+        error = subprocess.CalledProcessError(1, "ffprobe")
+        error.stderr = "Invalid data found when processing input"
+        mocker.patch(
+            "podcastify.media.subprocess.run",
+            side_effect=error,
+        )
+        log_mock = mocker.patch("podcastify.media.log")
+        result = MediaProcessor.get_duration_seconds(mock_mp3)
+        assert result is None
+        log_mock.assert_called_once()
+        call_args = log_mock.call_args[0][0]
+        assert "Invalid data found when processing input" in call_args
+        assert "exit 1" in call_args
+
+    def test_called_process_error_with_empty_stderr(self, mocker, mock_mp3):
+        """CalledProcessError with empty stderr should log placeholder."""
+        MediaProcessor.clear_cache()
+        error = subprocess.CalledProcessError(1, "ffprobe")
+        error.stderr = ""
+        mocker.patch(
+            "podcastify.media.subprocess.run",
+            side_effect=error,
+        )
+        log_mock = mocker.patch("podcastify.media.log")
+        result = MediaProcessor.get_duration_seconds(mock_mp3)
+        assert result is None
+        log_mock.assert_called_once()
+        call_args = log_mock.call_args[0][0]
+        assert "<no stderr>" in call_args
+
+    def test_stream_fallback_on_empty_format_duration(self, mocker, mock_mp3):
+        """When format=duration is empty, fallback to stream=duration."""
+        MediaProcessor.clear_cache()
+        # First call (format=duration) returns empty, second call (stream fallback) returns duration
+        mocker.patch(
+            "podcastify.media.subprocess.run",
+            side_effect=[
+                mocker.Mock(stdout="", stderr=""),
+                mocker.Mock(stdout="1234.5\n", stderr=""),
+            ],
+        )
+        result = MediaProcessor.get_duration_seconds(mock_mp3)
+        assert result == 1234.5
+
+    def test_stream_fallback_failure_returns_none(self, mocker, mock_mp3):
+        """When both format and stream durations fail, return None."""
+        MediaProcessor.clear_cache()
+        # First call (format=duration) returns empty, second call (stream fallback) fails
+        mocker.patch(
+            "podcastify.media.subprocess.run",
+            side_effect=[
+                mocker.Mock(stdout="", stderr=""),
+                subprocess.CalledProcessError(1, "ffprobe"),
+            ],
+        )
+        log_mock = mocker.patch("podcastify.media.log")
+        result = MediaProcessor.get_duration_seconds(mock_mp3)
+        assert result is None
+        # Should log <no duration data> message
+        log_mock.assert_called_once()
+        call_args = log_mock.call_args[0][0]
+        assert "<no duration data>" in call_args
+
+    def test_stream_fallback_caches_success(self, mocker, mock_mp3):
+        """Stream fallback result should be cached."""
+        MediaProcessor.clear_cache()
+        mocker.patch(
+            "podcastify.media.subprocess.run",
+            side_effect=[
+                mocker.Mock(stdout="", stderr=""),
+                mocker.Mock(stdout="999.0\n", stderr=""),
+            ],
+        )
+        result1 = MediaProcessor.get_duration_seconds(mock_mp3)
+        assert result1 == 999.0
+        # Second call should hit cache, no additional calls
+        proc_mock = mocker.patch(
+            "podcastify.media.subprocess.run",
+            return_value=mocker.Mock(stdout="should-not-be-called", stderr=""),
+        )
+        result2 = MediaProcessor.get_duration_seconds(mock_mp3)
+        assert result2 == 999.0
+        proc_mock.assert_not_called()

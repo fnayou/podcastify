@@ -95,6 +95,22 @@ class MediaProcessor:
         cls._load_disk_cache()
         if key in cls._duration_cache:
             return cls._duration_cache[key]
+
+        # Short-circuit zero-byte files
+        try:
+            file_size = mp3_path.stat().st_size
+        except (OSError, FileNotFoundError):
+            log(f"[WARN] Failed to get duration for {mp3_path.name}: <size check failed>")
+            cls._duration_cache[key] = None
+            cls._save_disk_cache()
+            return None
+
+        if file_size == 0:
+            log(f"[WARN] Failed to get duration for {mp3_path.name}: <zero-byte file>")
+            cls._duration_cache[key] = None
+            cls._save_disk_cache()
+            return None
+
         try:
             result = subprocess.run(
                 [
@@ -108,15 +124,63 @@ class MediaProcessor:
                 check=True,
                 timeout=30,
             )
-            dur = float(result.stdout.strip())
+            dur_str = result.stdout.strip()
+            if not dur_str:
+                # format=duration is empty, try stream-level fallback
+                dur = cls._try_stream_duration_fallback(mp3_path)
+                if dur is not None:
+                    cls._duration_cache[key] = dur
+                    cls._save_disk_cache()
+                    return dur
+                # Fallback also failed
+                log(f"[WARN] Failed to get duration for {mp3_path.name}: <no duration data>")
+                cls._duration_cache[key] = None
+                cls._save_disk_cache()
+                return None
+            dur = float(dur_str)
             cls._duration_cache[key] = dur
             cls._save_disk_cache()
             return dur
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, ValueError) as e:
+        except subprocess.CalledProcessError as e:
+            stderr_msg = e.stderr.strip() if e.stderr else "<no stderr>"
+            log(f"[WARN] Failed to get duration for {mp3_path.name}: <exit {e.returncode}> ffprobe: {stderr_msg}")
+            cls._duration_cache[key] = None
+            cls._save_disk_cache()
+            return None
+        except subprocess.TimeoutExpired as e:
             log(f"[WARN] Failed to get duration for {mp3_path.name}: {e}")
             cls._duration_cache[key] = None
             cls._save_disk_cache()
             return None
+        except ValueError as e:
+            log(f"[WARN] Failed to get duration for {mp3_path.name}: {e}")
+            cls._duration_cache[key] = None
+            cls._save_disk_cache()
+            return None
+
+    @classmethod
+    def _try_stream_duration_fallback(cls, mp3_path: Path) -> Optional[float]:
+        """Fallback: extract duration from audio stream when format=duration is empty."""
+        try:
+            result = subprocess.run(
+                [
+                    "ffprobe", "-v", "error",
+                    "-show_entries", "stream=duration",
+                    "-select_streams", "a:0",
+                    "-of", "default=nw=1:nk=1",
+                    str(mp3_path),
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=30,
+            )
+            dur_str = result.stdout.strip()
+            if dur_str:
+                return float(dur_str)
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, ValueError):
+            pass
+        return None
 
     @classmethod
     def warm_durations_parallel(cls, paths: List[Path], max_workers: int = 4) -> None:
