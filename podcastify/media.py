@@ -84,6 +84,22 @@ class MediaProcessor:
             path.unlink(missing_ok=True)
 
     @classmethod
+    def _cache_failure(cls, key: Tuple[str, float]) -> None:
+        cls._duration_cache[key] = None
+        cls._save_disk_cache()
+        return None
+
+    @classmethod
+    def _run_ffprobe(cls, mp3_path: Path, extra_args: List[str], timeout: int = 30) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            ["ffprobe", "-v", "error", *extra_args, "-of", "default=nw=1:nk=1", str(mp3_path)],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=timeout,
+        )
+
+    @classmethod
     def get_duration_seconds(cls, mp3_path: Path) -> Optional[float]:
         if not mp3_path.exists():
             return None
@@ -101,42 +117,25 @@ class MediaProcessor:
             file_size = mp3_path.stat().st_size
         except (OSError, FileNotFoundError):
             log(f"[WARN] Failed to get duration for {mp3_path.name}: <size check failed>")
-            cls._duration_cache[key] = None
-            cls._save_disk_cache()
-            return None
+            return cls._cache_failure(key)
 
         if file_size == 0:
             log(f"[WARN] Failed to get duration for {mp3_path.name}: <zero-byte file>")
-            cls._duration_cache[key] = None
-            cls._save_disk_cache()
-            return None
+            return cls._cache_failure(key)
 
         try:
-            result = subprocess.run(
-                [
-                    "ffprobe", "-v", "error",
-                    "-show_entries", "format=duration",
-                    "-of", "default=nw=1:nk=1",
-                    str(mp3_path),
-                ],
-                capture_output=True,
-                text=True,
-                check=True,
-                timeout=30,
-            )
+            result = cls._run_ffprobe(mp3_path, ["-show_entries", "format=duration"])
             dur_str = result.stdout.strip()
             if not dur_str:
                 # format=duration is empty, try stream-level fallback
-                dur = cls._try_stream_duration_fallback(mp3_path)
+                dur, fallback_reason = cls._try_stream_duration_fallback(mp3_path)
                 if dur is not None:
                     cls._duration_cache[key] = dur
                     cls._save_disk_cache()
                     return dur
-                # Fallback also failed
-                log(f"[WARN] Failed to get duration for {mp3_path.name}: <no duration data>")
-                cls._duration_cache[key] = None
-                cls._save_disk_cache()
-                return None
+                reason = fallback_reason or "<no duration data>"
+                log(f"[WARN] Failed to get duration for {mp3_path.name}: <no duration data> ({reason})")
+                return cls._cache_failure(key)
             dur = float(dur_str)
             cls._duration_cache[key] = dur
             cls._save_disk_cache()
@@ -144,43 +143,40 @@ class MediaProcessor:
         except subprocess.CalledProcessError as e:
             stderr_msg = e.stderr.strip() if e.stderr else "<no stderr>"
             log(f"[WARN] Failed to get duration for {mp3_path.name}: <exit {e.returncode}> ffprobe: {stderr_msg}")
-            cls._duration_cache[key] = None
-            cls._save_disk_cache()
-            return None
+            return cls._cache_failure(key)
         except subprocess.TimeoutExpired as e:
             log(f"[WARN] Failed to get duration for {mp3_path.name}: {e}")
-            cls._duration_cache[key] = None
-            cls._save_disk_cache()
-            return None
+            return cls._cache_failure(key)
         except ValueError as e:
             log(f"[WARN] Failed to get duration for {mp3_path.name}: {e}")
-            cls._duration_cache[key] = None
-            cls._save_disk_cache()
-            return None
+            return cls._cache_failure(key)
 
     @classmethod
-    def _try_stream_duration_fallback(cls, mp3_path: Path) -> Optional[float]:
-        """Fallback: extract duration from audio stream when format=duration is empty."""
+    def _try_stream_duration_fallback(cls, mp3_path: Path) -> Tuple[Optional[float], Optional[str]]:
+        """Fallback: extract duration from audio stream when format=duration is empty.
+
+        Returns:
+            Tuple of (duration, reason). On success, reason is None.
+            On failure, reason describes the error.
+        """
         try:
-            result = subprocess.run(
-                [
-                    "ffprobe", "-v", "error",
-                    "-show_entries", "stream=duration",
-                    "-select_streams", "a:0",
-                    "-of", "default=nw=1:nk=1",
-                    str(mp3_path),
-                ],
-                capture_output=True,
-                text=True,
-                check=True,
-                timeout=30,
+            result = cls._run_ffprobe(
+                mp3_path,
+                ["-show_entries", "stream=duration", "-select_streams", "a:0"],
+                timeout=10,
             )
             dur_str = result.stdout.strip()
-            if dur_str:
-                return float(dur_str)
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, ValueError):
-            pass
-        return None
+            if not dur_str:
+                return None, "<no stream duration data>"
+            return float(dur_str), None
+        except subprocess.CalledProcessError as e:
+            stderr_msg = e.stderr.strip() if e.stderr else "<no stderr>"
+            reason = f"<exit {e.returncode}> ffprobe: {stderr_msg}"
+            return None, reason
+        except subprocess.TimeoutExpired as e:
+            return None, str(e)
+        except ValueError as e:
+            return None, str(e)
 
     @classmethod
     def warm_durations_parallel(cls, paths: List[Path], max_workers: int = 4) -> None:

@@ -214,8 +214,11 @@ class TestGetDurationSeconds:
         result = MediaProcessor.get_duration_seconds(zero_byte)
         assert result is None
 
-    def test_called_process_error_logs_stderr(self, mocker, mock_mp3):
+    def test_called_process_error_logs_stderr(self, mocker, mock_mp3, tmp_path, monkeypatch):
         """CalledProcessError should log the stderr message."""
+        cache_root = tmp_path / "cache"
+        cache_root.mkdir()
+        monkeypatch.setattr("podcastify.config.Config.CACHE_ROOT", cache_root)
         MediaProcessor.clear_cache()
         error = subprocess.CalledProcessError(1, "ffprobe")
         error.stderr = "Invalid data found when processing input"
@@ -231,8 +234,11 @@ class TestGetDurationSeconds:
         assert "Invalid data found when processing input" in call_args
         assert "exit 1" in call_args
 
-    def test_called_process_error_with_empty_stderr(self, mocker, mock_mp3):
+    def test_called_process_error_with_empty_stderr(self, mocker, mock_mp3, tmp_path, monkeypatch):
         """CalledProcessError with empty stderr should log placeholder."""
+        cache_root = tmp_path / "cache"
+        cache_root.mkdir()
+        monkeypatch.setattr("podcastify.config.Config.CACHE_ROOT", cache_root)
         MediaProcessor.clear_cache()
         error = subprocess.CalledProcessError(1, "ffprobe")
         error.stderr = ""
@@ -261,8 +267,11 @@ class TestGetDurationSeconds:
         result = MediaProcessor.get_duration_seconds(mock_mp3)
         assert result == 1234.5
 
-    def test_stream_fallback_failure_returns_none(self, mocker, mock_mp3):
+    def test_stream_fallback_failure_returns_none(self, mocker, mock_mp3, tmp_path, monkeypatch):
         """When both format and stream durations fail, return None."""
+        cache_root = tmp_path / "cache"
+        cache_root.mkdir()
+        monkeypatch.setattr("podcastify.config.Config.CACHE_ROOT", cache_root)
         MediaProcessor.clear_cache()
         # First call (format=duration) returns empty, second call (stream fallback) fails
         mocker.patch(
@@ -279,6 +288,7 @@ class TestGetDurationSeconds:
         log_mock.assert_called_once()
         call_args = log_mock.call_args[0][0]
         assert "<no duration data>" in call_args
+        assert "<exit 1> ffprobe: <no stderr>" in call_args
 
     def test_stream_fallback_caches_success(self, mocker, mock_mp3):
         """Stream fallback result should be cached."""
@@ -300,3 +310,46 @@ class TestGetDurationSeconds:
         result2 = MediaProcessor.get_duration_seconds(mock_mp3)
         assert result2 == 999.0
         proc_mock.assert_not_called()
+
+    def test_stream_fallback_value_error_returns_none(self, mocker, mock_mp3, tmp_path, monkeypatch):
+        """Malformed stream-duration string (ValueError) is folded into the final WARN."""
+        cache_root = tmp_path / "cache"
+        cache_root.mkdir()
+        monkeypatch.setattr("podcastify.config.Config.CACHE_ROOT", cache_root)
+        MediaProcessor.clear_cache()
+        mocker.patch(
+            "podcastify.media.subprocess.run",
+            side_effect=[
+                mocker.Mock(stdout="", stderr=""),
+                mocker.Mock(stdout="N/A\n", stderr=""),
+            ],
+        )
+        log_mock = mocker.patch("podcastify.media.log")
+        result = MediaProcessor.get_duration_seconds(mock_mp3)
+        assert result is None
+        log_mock.assert_called_once()
+        call_args = log_mock.call_args[0][0]
+        assert "<no duration data>" in call_args
+        assert "could not convert string to float" in call_args
+
+    def test_stream_fallback_success_persists_to_disk(self, mocker, mock_mp3, tmp_path, monkeypatch):
+        """A successfully-resolved fallback duration is written to the on-disk cache."""
+        cache_root = tmp_path / "cache"
+        cache_root.mkdir()
+        monkeypatch.setattr("podcastify.config.Config.CACHE_ROOT", cache_root)
+        MediaProcessor.clear_cache()
+        mocker.patch(
+            "podcastify.media.subprocess.run",
+            side_effect=[
+                mocker.Mock(stdout="", stderr=""),
+                mocker.Mock(stdout="555.5\n", stderr=""),
+            ],
+        )
+        result = MediaProcessor.get_duration_seconds(mock_mp3)
+        assert result == 555.5
+
+        cache_file = cache_root / ".podcastify-cache.json"
+        assert cache_file.exists()
+        content = cache_file.read_text(encoding="utf-8")
+        assert "555.5" in content
+        assert str(mock_mp3) in content
