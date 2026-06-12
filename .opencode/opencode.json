@@ -1,0 +1,75 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "default_agent": "planner",
+  "instructions": [".claude/rules/rules.md", "AGENTS.md"],
+  "compaction": {
+    "auto": true,
+    "tail_turns": 15
+  },
+  "tool_output": {
+    "max_lines": 200
+  },
+  "agent": {
+    "planner": {
+      "model": "opencode-go/glm-5.1",
+      "mode": "primary",
+      "description": "Planning, design, and estimation for Podcastify features. Discuss and design before implementation.",
+      "steps": 30,
+      "permission": {
+        "edit": "deny",
+        "bash": "deny"
+      }
+    },
+    "builder": {
+      "model": "opencode-go/kimi-k2.6",
+      "mode": "primary",
+      "description": "Implementation agent. Write and modify podcastify/ package, app.py, tests, Docker config, and Taskfile.",
+      "steps": 50,
+      "permission": {
+        "edit": "allow"
+      }
+    },
+    "reviewer": {
+      "model": "opencode-go/kimi-k2.6",
+      "mode": "subagent",
+      "description": "Code review agent. Audit changes for Python correctness, Docker conventions, and CI compliance before committing.",
+      "steps": 20,
+      "permission": {
+        "edit": "deny",
+        "bash": "deny"
+      }
+    },
+    "architect": {
+      "model": "opencode-go/glm-5.1",
+      "mode": "subagent",
+      "description": "Premium architecture agent. Complex podcastify/ design, Docker/Caddy/supervisord changes, and documentation.",
+      "steps": 30,
+      "permission": {
+        "edit": "deny",
+        "bash": "deny"
+      }
+    }
+  },
+  "command": {
+    "pr": {
+      "description": "Generate a PR summary from current git changes",
+      "agent": "builder",
+      "template": "@.claude/skills/pr-command.md"
+    },
+    "release": {
+      "description": "Draft release notes from git history",
+      "agent": "planner",
+      "template": "@.claude/skills/release-command.md"
+    },
+    "review": {
+      "description": "Pre-commit audit against project rules",
+      "agent": "reviewer",
+      "template": "@.claude/skills/review-command.md"
+    },
+    "validate-changes": {
+      "description": "Run full test coverage and Docker build validation",
+      "agent": "builder",
+      "template": "@.claude/skills/validate-changes-command.md"
+    }
+  }
+}

@@ -10,6 +10,6 @@ if [ "${RUN_ON_START:-true}" = "true" ]; then
   fi
 fi
 
-echo "🌐 Starting Caddy on : $PUBLIC_BASE_URL"
+echo "🌐 Starting Caddy on :${SERVICE_PORT:-8080}"
 
-exec /usr/bin/supervisord -c /etc/supervisord.conf
+exec /sbin/tini -- /usr/bin/supervisord -c /etc/supervisord.conf

@@ -1,0 +1,170 @@
+version: "3"
+
+tasks:
+  up:
+    desc: Build and start the podcast generator service
+    silent: true
+    cmds:
+      - echo "Building and starting {{.SERVICE_NAME}} service..."
+      - "{{.COMPOSE}} up -d --build"
+      - echo "Service started."
+      - task: status
+
+  down:
+    desc: Stop and remove containers
+    silent: true
+    cmds:
+      - echo "Stopping {{.SERVICE_NAME}} service..."
+      - "{{.COMPOSE}} down"
+      - echo "Service stopped."
+
+  restart:
+    desc: Restart the service with rebuild
+    silent: true
+    cmds:
+      - echo "Restarting {{.SERVICE_NAME}} service..."
+      - task: down
+      - task: up
+
+  status:
+    desc: Show service status and recent logs
+    silent: true
+    cmds:
+      - |
+        echo "Service status:"
+        {{.COMPOSE}} ps {{.SERVICE_NAME}}
+        echo
+        echo "Recent logs (last 10 lines):"
+        {{.COMPOSE}} logs --tail=10 {{.SERVICE_NAME}} 2>/dev/null || echo "No logs available"
+
+  logs:
+    desc: Follow service logs in real-time
+    cmds:
+      - echo "Following logs for {{.SERVICE_NAME}} (Ctrl+C to stop)..."
+      - "{{.COMPOSE}} logs -f --tail={{.LOG_LINES}} {{.SERVICE_NAME}} {{.CLI_ARGS}}"
+
+  logs:recent:
+    desc: Show recent logs without following
+    silent: true
+    cmds:
+      - "{{.COMPOSE}} logs --tail={{.LOG_LINES}} {{.SERVICE_NAME}} {{.CLI_ARGS}}"
+
+  logs:errors:
+    desc: Show only error, warn, and fail log lines
+    silent: true
+    cmds:
+      - |
+        {{.COMPOSE}} logs {{.SERVICE_NAME}} | grep -Ei "error|warn|fail|traceback" || echo "No errors found in logs"
+
+  shell:
+    desc: Open interactive shell in running container
+    interactive: true
+    preconditions:
+      - sh: 'test -n "$({{.COMPOSE}} ps -q {{.SERVICE_NAME}})"'
+        msg: "Service {{.SERVICE_NAME}} is not running. Use 'task docker:up' first."
+    cmds:
+      - echo "Opening shell in {{.SERVICE_NAME}} container..."
+      - "{{.COMPOSE}} exec {{.SERVICE_NAME}} sh"
+
+  shell:root:
+    desc: Open root shell in running container (debugging)
+    interactive: true
+    preconditions:
+      - sh: 'test -n "$({{.COMPOSE}} ps -q {{.SERVICE_NAME}})"'
+        msg: "Service {{.SERVICE_NAME}} is not running. Use 'task docker:up' first."
+    cmds:
+      - echo "Opening root shell in {{.SERVICE_NAME}} container..."
+      - "{{.COMPOSE}} exec --user root {{.SERVICE_NAME}} sh"
+
+  inspect:
+    desc: Show container environment and processes
+    silent: true
+    preconditions:
+      - sh: 'test -n "$({{.COMPOSE}} ps -q {{.SERVICE_NAME}})"'
+        msg: "Service {{.SERVICE_NAME}} is not running. Use 'task docker:up' first."
+    cmds:
+      - |
+        echo "Container environment:"
+        {{.COMPOSE}} exec {{.SERVICE_NAME}} env | sort
+        echo
+        echo "Container processes:"
+        {{.COMPOSE}} exec {{.SERVICE_NAME}} ps aux
+
+  build:
+    desc: Rebuild image without cache
+    silent: true
+    cmds:
+      - echo "Rebuilding {{.SERVICE_NAME}} image (no cache)..."
+      - "{{.COMPOSE}} build --no-cache {{.SERVICE_NAME}}"
+      - echo "Image rebuilt."
+
+  build:quick:
+    desc: Quick rebuild with cache
+    silent: true
+    cmds:
+      - echo "Quick rebuild of {{.SERVICE_NAME}} image..."
+      - "{{.COMPOSE}} build {{.SERVICE_NAME}}"
+      - echo "Quick build completed."
+
+  pull:
+    desc: Pull latest base images
+    silent: true
+    cmds:
+      - echo "Pulling latest base images..."
+      - "{{.COMPOSE}} pull"
+      - echo "Base images updated."
+
+  compose:config:
+    desc: Show resolved docker-compose config
+    silent: true
+    cmds:
+      - "{{.COMPOSE}} config"
+
+  compose:ps:
+    desc: List compose services and containers
+    silent: true
+    cmds:
+      - "{{.COMPOSE}} ps"
+
+  env:
+    desc: Show compose-related environment and config validity
+    silent: true
+    cmds:
+      - |
+        echo "Environment:"
+        echo 'COMPOSE={{.COMPOSE}}'
+        echo 'SERVICE_NAME={{.SERVICE_NAME}}'
+        echo 'PUBLIC_DIR={{.PUBLIC_DIR}}'
+        echo 'PODCASTS_DIR={{.PODCASTS_DIR}}'
+        echo
+        echo "Docker Compose config:"
+        {{.COMPOSE}} config --quiet 2>/dev/null && echo 'Compose file: OK' || echo 'Compose file: INVALID'
+
+  clean:
+    desc: Remove containers, networks, and volumes (prune)
+    silent: true
+    prompt: "This will remove containers, networks, and volumes. Continue?"
+    cmds:
+      - echo "Cleaning Docker resources..."
+      - "{{.COMPOSE}} down --volumes"
+      - docker system prune -f
+      - echo "Docker cleanup completed."
+
+  clean:all:
+    desc: Remove feeds, containers, images, and volumes
+    silent: true
+    prompt: "This will remove all containers, images, and RSS feeds. Continue?"
+    cmds:
+      - task podcastify:clean:feeds
+      - echo "Removing containers and images..."
+      - "{{.COMPOSE}} down --rmi all --volumes"
+      - echo "Full cleanup completed."
+
+  fix:perms:
+    desc: "Chown podcasts/public on Linux host (task docker:fix:perms UID=$(id -u) GID=$(id -g))"
+    silent: true
+    vars:
+      UID: '{{.UID | default "1000"}}'
+      GID: '{{.GID | default "1000"}}'
+    cmds:
+      - sudo chown -R {{.UID}}:{{.GID}} {{.PODCASTS_DIR}} {{.PUBLIC_DIR}} || true

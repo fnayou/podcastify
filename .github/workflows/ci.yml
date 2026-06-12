@@ -1,0 +1,167 @@
+name: CI
+on:
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+
+env:
+  REGISTRY: docker.io
+  IMAGE_NAME: fnayou/podcastify
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: ci-test-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Run tests
+        run: python -m pytest tests/ --cov=podcastify --cov-report=term-missing --cov-fail-under=90 --tb=short -q
+
+  docker:
+    needs: [test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: ci-docker-${{ github.ref }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      security-events: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: image=moby/buildkit:buildx-stable-1
+
+      - name: Extract version
+        id: version
+        shell: bash
+        run: |
+          VERSION="$(date -u +%Y%m%d)-${GITHUB_SHA::7}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=pr-${{ github.event.number }},enable=${{ github.event_name == 'pull_request' }}
+          labels: |
+            org.opencontainers.image.title=podcastify
+            org.opencontainers.image.description=tiny self-hosted podcast RSS generator. Create private podcast feeds from your own MP3s with zero fuss.
+            org.opencontainers.image.licenses=MIT
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created=${{ steps.meta.outputs.created }}
+
+      - name: Build (PR, no push)
+        id: build-pr
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/podcastify/Dockerfile
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: local/podcastify:${{ github.sha }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+            BUILD_DATE=${{ steps.meta.outputs.created }}
+            VCS_REF=${{ github.sha }}
+
+      - name: Note about forked PRs (no Docker Hub secrets)
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == true
+        run: echo "Skipping Docker Scout on forked PRs (no secrets). Trivy still runs."
+
+      - name: Login to Docker Hub (PR, same-repo only)
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false
+        uses: docker/login-action@v3
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Docker Scout (PR)
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false
+        id: docker-scout
+        continue-on-error: true
+        uses: docker/scout-action@v1
+        with:
+          command: cves
+          image: local://local/podcastify:${{ github.sha }}
+          only-severities: critical,high
+          only-fixed: true
+          summary: true
+          write-comment: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          sarif-file: docker-scout.sarif
+
+      - name: Upload SARIF (Scout, PR)
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: docker-scout.sarif
+
+      - name: Trivy scan (PR, non-blocking)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: "local/podcastify:${{ github.sha }}"
+          format: "table"
+          vuln-type: "os,library"
+          severity: "CRITICAL,HIGH"
+          ignore-unfixed: true
+          exit-code: "0"
+          hide-progress: true
+
+      - name: Trivy SARIF (PR)
+        id: sarif-pr
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: "local/podcastify:${{ github.sha }}"
+          format: "sarif"
+          output: "trivy-results.sarif"
+          vuln-type: "os,library"
+          severity: "CRITICAL,HIGH,MEDIUM,LOW"
+          ignore-unfixed: true
+          hide-progress: true
+
+      - name: Upload SARIF (Trivy, PR)
+        if: steps.sarif-pr.outcome == 'success'
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: "trivy-results.sarif"

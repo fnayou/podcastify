@@ -14,8 +14,10 @@ services:
       - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://localhost:${HOST_PORT:-8080}}
       - PODCASTS_ROOT=${PODCASTS_ROOT:-/app/podcasts}
       - PUBLIC_ROOT=${PUBLIC_ROOT:-/app/public}
+      - CACHE_ROOT=${CACHE_ROOT:-/app/.cache}
       - RUN_ON_START=${RUN_ON_START:-true}
       - PUBLISH_XML=${PUBLISH_XML:-true}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
 
     volumes:
       - ./public:/app/public:rw

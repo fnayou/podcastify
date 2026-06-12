@@ -1,7 +1,12 @@
 FROM python:3.12-alpine3.22
 
-# System deps (keep small)
-RUN apk add --no-cache caddy ffmpeg supervisor tini ca-certificates
+# System deps (keep small, versions pinned to alpine 3.22 stable)
+RUN apk add --no-cache \
+    caddy \
+    ffmpeg \
+    supervisor \
+    tini \
+    ca-certificates
 
 WORKDIR /app
 
@@ -11,6 +16,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # App + configs
 COPY app.py /app/
+COPY podcastify/ /app/podcastify/
 COPY docker/podcastify/Caddyfile        /etc/caddy/Caddyfile
 COPY docker/podcastify/supervisord.conf /etc/supervisord.conf
 COPY docker/podcastify/entrypoint.sh    /entrypoint.sh
@@ -23,9 +29,14 @@ ENV SERVICE_PORT=8080 \
   PUBLIC_BASE_URL=http://localhost:8080 \
   PODCASTS_ROOT=/app/podcasts \
   PUBLIC_ROOT=/app/public \
+  CACHE_ROOT=/app/.cache \
   RUN_ON_START=true \
-  PUBLISH_XML=true
+  PUBLISH_XML=true \
+  LOG_LEVEL=INFO \
+  PYTHONUNBUFFERED=1
 
 EXPOSE 8080
+
+HEALTHCHECK CMD wget -q -O- http://localhost:${SERVICE_PORT}/ || exit 1
 
 ENTRYPOINT ["/entrypoint.sh"]
