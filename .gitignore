@@ -17,11 +17,6 @@ venv/
 .idea/
 .vscode/
 
-# AI plan files (local scratch)
-.claude/plan/*.md
-!.claude/plan/.gitkeep
-!.claude/plan/archive/*
-
 # AI-generated PR summaries (local scratch)
 .pr/
 
