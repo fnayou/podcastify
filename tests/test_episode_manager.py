@@ -223,7 +223,8 @@ class TestResolveImageUrl:
         pub_dir.mkdir()
         result = EpisodeManager.resolve_image_url("myshow", {"image": "missing.jpg"})
         assert result is None
-        assert any(record.levelname == "WARNING" for record in caplog.records)
+        warnings = [r.message for r in caplog.records if r.levelname == "WARNING"]
+        assert warnings == [f"Image file not found: {pub_dir / 'missing.jpg'}"]
 
     def test_absolute_url(self, tmp_path, monkeypatch):
         monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)

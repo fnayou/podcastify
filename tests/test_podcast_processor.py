@@ -43,7 +43,8 @@ class TestProcessPodcast:
         proc = PodcastProcessor()
         ok = proc.process_podcast("empty", cfg)
         assert ok is False
-        assert any(record.levelname == "ERROR" for record in caplog.records)
+        errors = [r.message for r in caplog.records if r.levelname == "ERROR"]
+        assert "Empty or invalid config for empty" in errors
 
     def test_unexpected_error_logs_traceback(self, tmp_path, monkeypatch, caplog, mocker):
         monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
@@ -77,7 +78,9 @@ class TestProcessPodcast:
         proc = PodcastProcessor()
         ok = proc.process_podcast("bad", cfg)
         assert ok is False
-        assert any("validation" in record.message.lower() for record in caplog.records)
+        errors = [r.message for r in caplog.records if r.levelname == "ERROR"]
+        assert len(errors) == 1
+        assert errors[0].startswith("Config validation failed for bad:")
 
     def test_bad_base_url_scheme(self, tmp_path, monkeypatch, caplog):
         monkeypatch.setattr("podcastify.config.Config.PODCASTS_ROOT", tmp_path)
