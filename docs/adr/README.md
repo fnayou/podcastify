@@ -8,6 +8,7 @@
 | [0004](0004-path-env-vars-are-internal.md) | Container path variables are image defaults, not settings | Accepted |
 | [0005](0005-puid-pgid-runtime.md) | PUID/PGID drop with su-exec; pinned `user:` as hardened mode | Accepted |
 | [0006](0006-tinytag-for-durations.md) | tinytag for episode durations, ffmpeg removed | Accepted |
+| [0007](0007-calver-and-release-policy.md) | CalVer tags and release policy | Accepted |
 
 ## Writing an ADR
 

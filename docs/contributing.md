@@ -102,6 +102,10 @@ The `commit-msg` hook checks this locally (`task dev:hooks`). The `commits` CI c
 4. Commit with the conventional format
 5. Push and open a PR titled in the same format
 
+## Releases
+
+Releases are git tags in the form `vYYYY.M.PATCH` (CalVer, for example `v2026.10.0`), pushed by the owner. The tag format, the Docker Hub tags, the provenance and the release notes are recorded in [ADR 0007](adr/0007-calver-and-release-policy.md). The helper `task release:tag`, which computes and proposes the next tag, is planned (#103) and does not exist yet. Release notes are published on [GitHub Releases](https://github.com/fnayou/podcastify/releases).
+
 ## CI time budget
 
 CI execution time is a requirement. A PR must not push any workflow past its budget. Every PR that touches `.github/workflows/` reports the job durations before and after the change in its description.
