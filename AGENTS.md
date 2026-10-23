@@ -45,7 +45,7 @@ task worktree:verify            # check lane tooling and the merge refusals
 
 | Class | Module | Responsibility |
 |---|---|---|
-| `Config` | `config.py` | env vars and field whitelists |
+| `Config` | `config.py` | env vars and media types |
 | `MediaProcessor` | `media.py` | ffprobe duration, persistent cache |
 | `ConfigurationManager`, `EpisodeManager` | `parser.py` | YAML load/validate, episode discovery |
 | `RSSGenerator` | `rss.py` | iTunes RSS XML |
