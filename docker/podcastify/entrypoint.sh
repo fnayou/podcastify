@@ -47,7 +47,12 @@ else
   RUNAS=""
 fi
 
-if [ "${RUN_ON_START:-true}" = "true" ]; then
+run_on_start="$(printf '%s' "${RUN_ON_START:-true}" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
+case "$run_on_start" in
+  true|yes|1|on) run_on_start=true ;;
+esac
+
+if [ "$run_on_start" = "true" ]; then
   echo "🎙️  Running generator at startup..."
   if ! $RUNAS python /app/app.py generate; then
     echo "⚠️  Generator exited non-zero; continuing to serve existing content"
