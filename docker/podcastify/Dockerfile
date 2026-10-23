@@ -58,6 +58,6 @@ ENV SERVICE_PORT=8080 \
 
 EXPOSE 8080
 
-HEALTHCHECK CMD wget -q -O- http://localhost:${SERVICE_PORT}/ || exit 1
+HEALTHCHECK --interval=30s --timeout=3s --start-period=120s CMD wget -q --spider http://127.0.0.1:${SERVICE_PORT}/healthz || exit 1
 
 ENTRYPOINT ["/entrypoint.sh"]

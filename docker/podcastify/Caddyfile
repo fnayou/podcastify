@@ -1,5 +1,9 @@
 :{$SERVICE_PORT} {
 	root * /app/public
+
+	@health path /healthz
+	respond @health "ok" 200
+	log_skip @health
 	encode gzip
 	header Access-Control-Allow-Origin "*"
 
@@ -15,7 +19,6 @@
 	header @images Cache-Control "public, max-age=86400"
 
 	file_server {
-		browse
 		hide .*
 	}
 
