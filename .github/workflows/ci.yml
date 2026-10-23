@@ -5,23 +5,26 @@ on:
       - main
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
-  REGISTRY: docker.io
   IMAGE_NAME: fnayou/podcastify
 
 jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    concurrency:
-      group: ci-test-${{ github.ref }}
-      cancel-in-progress: true
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.12"
           cache: pip
@@ -41,27 +44,17 @@ jobs:
     needs: [test]
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    concurrency:
-      group: ci-docker-${{ github.ref }}
-      cancel-in-progress: false
     permissions:
       contents: read
-      id-token: write
-      attestations: write
       security-events: write
       pull-requests: write
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-        with:
-          driver-opts: image=moby/buildkit:buildx-stable-1
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
       - name: Extract version
         id: version
@@ -72,11 +65,9 @@ jobs:
 
       - name: Docker meta
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
         with:
           images: ${{ env.IMAGE_NAME }}
-          tags: |
-            type=raw,value=pr-${{ github.event.number }},enable=${{ github.event_name == 'pull_request' }}
           labels: |
             org.opencontainers.image.title=podcastify
             org.opencontainers.image.description=tiny self-hosted podcast RSS generator. Create private podcast feeds from your own MP3s with zero fuss.
@@ -88,7 +79,7 @@ jobs:
 
       - name: Build (PR, no push)
         id: build-pr
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: .
           file: docker/podcastify/Dockerfile
@@ -99,10 +90,6 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          build-args: |
-            VERSION=${{ steps.version.outputs.version }}
-            BUILD_DATE=${{ steps.meta.outputs.created }}
-            VCS_REF=${{ github.sha }}
 
       - name: Note about forked PRs (no Docker Hub secrets)
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == true
@@ -110,7 +97,7 @@ jobs:
 
       - name: Login to Docker Hub (PR, same-repo only)
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: docker.io
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -120,7 +107,7 @@ jobs:
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false
         id: docker-scout
         continue-on-error: true
-        uses: docker/scout-action@v1
+        uses: docker/scout-action@a4119c5a8c5076236a54e4ce99531f7e4dd2ef84 # v1.27.0
         with:
           command: cves
           image: local://local/podcastify:${{ github.sha }}
@@ -133,12 +120,12 @@ jobs:
 
       - name: Upload SARIF (Scout, PR)
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@4bfa242aa49c5f7c6770b98670d354a7dfac05f8 # v3.39.1
         with:
           sarif_file: docker-scout.sarif
 
       - name: Trivy scan (PR, non-blocking)
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: "local/podcastify:${{ github.sha }}"
           format: "table"
@@ -150,7 +137,7 @@ jobs:
 
       - name: Trivy SARIF (PR)
         id: sarif-pr
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: "local/podcastify:${{ github.sha }}"
           format: "sarif"
@@ -162,6 +149,6 @@ jobs:
 
       - name: Upload SARIF (Trivy, PR)
         if: steps.sarif-pr.outcome == 'success'
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@4bfa242aa49c5f7c6770b98670d354a7dfac05f8 # v3.39.1
         with:
           sarif_file: "trivy-results.sarif"
