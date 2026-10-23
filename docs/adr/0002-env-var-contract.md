@@ -49,7 +49,8 @@ migration note.
   parser, `_coerce_bool` (`podcastify/config.py`): `true/yes/1/on` and
   `false/no/0/off`, case-insensitive. Any other string is read as false and
   logged as a warning. This replaces the earlier "only `true`" env rule. The
-  entrypoint still tests `RUN_ON_START` against the literal `true`.
+  entrypoint reads `RUN_ON_START` the same way: `true/yes/1/on`,
+  case-insensitive, run the generator at boot.
 
 ## References
 
