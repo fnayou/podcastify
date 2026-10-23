@@ -2,10 +2,13 @@
 """Tests for MediaProcessor class."""
 
 import json
-import subprocess
+import logging
+import os
+import random
 from pathlib import Path
 
 import pytest
+from tinytag import TinyTag, TinyTagException
 
 from podcastify.media import MediaProcessor
 
@@ -40,425 +43,236 @@ class TestFormatItunesDuration:
         assert MediaProcessor.format_itunes_duration(-5) == "0:00"
 
 
-class TestGetDurationSeconds:
-    def test_missing_file_returns_none(self):
-        result = MediaProcessor.get_duration_seconds(Path("/nonexistent/file.mp3"))
-        assert result is None
-
-    def test_success(self, mocker, mock_mp3):
-        proc_mock = mocker.patch(
-            "podcastify.media.subprocess.run",
-            return_value=mocker.Mock(stdout="1845.2\n", stderr=""),
-        )
-        result = MediaProcessor.get_duration_seconds(mock_mp3)
-        assert result == 1845.2
-        proc_mock.assert_called_once()
-        args = proc_mock.call_args[0][0]
-        assert args[0] == "ffprobe"
-        assert "format=duration" in args
-
-    def test_called_process_error(self, mocker, mock_mp3):
-        mocker.patch(
-            "podcastify.media.subprocess.run",
-            side_effect=subprocess.CalledProcessError(1, "ffprobe"),
-        )
-        result = MediaProcessor.get_duration_seconds(mock_mp3)
-        assert result is None
-
-    def test_timeout(self, mocker, mock_mp3):
-        mocker.patch(
-            "podcastify.media.subprocess.run",
-            side_effect=subprocess.TimeoutExpired("ffprobe", 30),
-        )
-        result = MediaProcessor.get_duration_seconds(mock_mp3)
-        assert result is None
-
-    def test_value_error(self, mocker, mock_mp3):
-        mocker.patch(
-            "podcastify.media.subprocess.run",
-            return_value=mocker.Mock(stdout="not-a-number", stderr=""),
-        )
-        result = MediaProcessor.get_duration_seconds(mock_mp3)
-        assert result is None
-
-    def test_cache_hit(self, mocker, mock_mp3):
-        MediaProcessor.clear_cache()
-        proc_mock = mocker.patch(
-            "podcastify.media.subprocess.run",
-            return_value=mocker.Mock(stdout="1234.5\n", stderr=""),
-        )
-        # First call should invoke ffprobe
-        result1 = MediaProcessor.get_duration_seconds(mock_mp3)
-        assert result1 == 1234.5
-        assert proc_mock.call_count == 1
-        # Second call should hit cache (no additional ffprobe call)
-        result2 = MediaProcessor.get_duration_seconds(mock_mp3)
-        assert result2 == 1234.5
-        assert proc_mock.call_count == 1
-
-    def test_cache_miss_on_mtime_change(self, mocker, mock_mp3):
-        MediaProcessor.clear_cache()
-        proc_mock = mocker.patch(
-            "podcastify.media.subprocess.run",
-            side_effect=[
-                mocker.Mock(stdout="1000.0\n", stderr=""),
-                mocker.Mock(stdout="2000.0\n", stderr=""),
-            ],
-        )
-        result1 = MediaProcessor.get_duration_seconds(mock_mp3)
-        assert result1 == 1000.0
-        # Modify the file to change mtime
-        mock_mp3.write_bytes(b"\x00" * 2048)
-        result2 = MediaProcessor.get_duration_seconds(mock_mp3)
-        assert result2 == 2000.0
-        assert proc_mock.call_count == 2
-
-    def test_failure_cached(self, mocker, mock_mp3):
-        MediaProcessor.clear_cache()
-        mocker.patch(
-            "podcastify.media.subprocess.run",
-            side_effect=subprocess.CalledProcessError(1, "ffprobe"),
-        )
-        result1 = MediaProcessor.get_duration_seconds(mock_mp3)
-        assert result1 is None
-        # Second call should also return None from cache
-        result2 = MediaProcessor.get_duration_seconds(mock_mp3)
-        assert result2 is None
-
-    def test_disk_cache_persists(self, mocker, mock_mp3, tmp_path, monkeypatch):
-        cache_root = tmp_path / "cache"
-        cache_root.mkdir()
-        monkeypatch.setattr("podcastify.config.Config.CACHE_ROOT", cache_root)
-        MediaProcessor.clear_cache()
-        proc_mock = mocker.patch(
-            "podcastify.media.subprocess.run",
-            return_value=mocker.Mock(stdout="999.0\n", stderr=""),
-        )
-        assert MediaProcessor.get_duration_seconds(mock_mp3) == 999.0
-        assert proc_mock.call_count == 1
-        MediaProcessor._duration_cache.clear()
-        MediaProcessor._disk_loaded = False
-        proc_mock.reset_mock()
-        assert MediaProcessor.get_duration_seconds(mock_mp3) == 999.0
-        proc_mock.assert_not_called()
-
-    def test_legacy_cache_migration(self, mocker, mock_mp3, tmp_path, monkeypatch):
-        public_root = tmp_path / "public"
-        cache_root = tmp_path / "cache"
-        public_root.mkdir()
-        public_root.mkdir(parents=True, exist_ok=True)
-
-        monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", public_root)
-        monkeypatch.setattr("podcastify.config.Config.CACHE_ROOT", cache_root)
-
-        legacy_cache = public_root / ".podcastify-cache.json"
-        legacy_cache.write_text('{"path|123.45": 567.89}', encoding="utf-8")
-
-        MediaProcessor.clear_cache()
-        mocker.patch(
-            "podcastify.media.subprocess.run",
-            return_value=mocker.Mock(stdout="100.0\n", stderr=""),
-        )
-
-        MediaProcessor._load_disk_cache()
-
-        assert not legacy_cache.exists()
-        new_cache = cache_root / ".podcastify-cache.json"
-        assert new_cache.exists()
-        assert "path|123.45" in new_cache.read_text(encoding="utf-8")
-
-    def test_cache_pruning_removes_nonexistent_files(self, mocker, tmp_path, monkeypatch):
-        cache_root = tmp_path / "cache"
-        cache_root.mkdir()
-        monkeypatch.setattr("podcastify.config.Config.CACHE_ROOT", cache_root)
-
-        MediaProcessor.clear_cache()
-
-        existing_file = tmp_path / "exists.mp3"
-        existing_file.write_bytes(b"\x00" * 1024)
-        nonexistent_file = tmp_path / "missing.mp3"
-
-        key_exists = (str(existing_file), 123.45)
-        key_missing = (str(nonexistent_file), 456.78)
-
-        MediaProcessor._duration_cache[key_exists] = 100.0
-        MediaProcessor._duration_cache[key_missing] = 200.0
-
-        MediaProcessor._save_disk_cache()
-
-        cache_content = cache_root / ".podcastify-cache.json"
-        content = cache_content.read_text(encoding="utf-8")
-
-        assert str(existing_file) in content
-        assert str(nonexistent_file) not in content
-
-    def test_warm_durations_parallel(self, mocker, tmp_path):
-        MediaProcessor.clear_cache()
-        paths = []
-        for i in range(3):
-            p = tmp_path / f"ep{i}.mp3"
-            p.write_bytes(b"\x00" * 64)
-            paths.append(p)
-        proc_mock = mocker.patch(
-            "podcastify.media.subprocess.run",
-            return_value=mocker.Mock(stdout="60.0\n", stderr=""),
-        )
-        MediaProcessor.warm_durations_parallel(paths, max_workers=2)
-        assert proc_mock.call_count == 3
-
-    def test_ffprobe_missing_returns_none_without_caching(self, mocker, mock_mp3, tmp_path, monkeypatch):
-        cache_root = tmp_path / "cache"
-        cache_root.mkdir()
-        monkeypatch.setattr("podcastify.config.Config.CACHE_ROOT", cache_root)
-        MediaProcessor.clear_cache()
-        mocker.patch(
-            "podcastify.media.subprocess.run",
-            side_effect=FileNotFoundError(2, "No such file or directory", "ffprobe"),
-        )
-        assert MediaProcessor.get_duration_seconds(mock_mp3) is None
-        assert MediaProcessor._duration_cache == {}
-        mocker.patch(
-            "podcastify.media.subprocess.run",
-            return_value=mocker.Mock(stdout="42.0\n", stderr=""),
-        )
-        assert MediaProcessor.get_duration_seconds(mock_mp3) == 42.0
-
-    def test_ffprobe_missing_warns_once_in_parallel(self, mocker, tmp_path, monkeypatch, caplog):
-        import logging
-
-        caplog.set_level(logging.DEBUG)
-        cache_root = tmp_path / "cache"
-        cache_root.mkdir()
-        monkeypatch.setattr("podcastify.config.Config.CACHE_ROOT", cache_root)
-        MediaProcessor.clear_cache()
-        paths = []
-        for i in range(3):
-            p = tmp_path / f"ep{i}.mp3"
-            p.write_bytes(b"\x00" * 64)
-            paths.append(p)
-        mocker.patch(
-            "podcastify.media.subprocess.run",
-            side_effect=FileNotFoundError(2, "No such file or directory", "ffprobe"),
-        )
-        MediaProcessor.warm_durations_parallel(paths, max_workers=2)
-        MediaProcessor.warm_durations_parallel(paths, max_workers=2)
-        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
-        assert len(warnings) == 1
-        assert "ffprobe" in warnings[0].message
-        assert MediaProcessor._duration_cache == {}
-
-    def test_zero_byte_file_returns_none(self, mock_mp3):
-        """Zero-byte file should return None without calling ffprobe."""
-        MediaProcessor.clear_cache()
-        # Create a zero-byte file
-        zero_byte = mock_mp3.parent / "zero.mp3"
-        zero_byte.write_bytes(b"")
-        result = MediaProcessor.get_duration_seconds(zero_byte)
-        assert result is None
-
-    def test_called_process_error_logs_stderr(self, mocker, mock_mp3, tmp_path, monkeypatch, caplog):
-        """CalledProcessError should log the stderr message."""
-        import logging
-
-        caplog.set_level(logging.DEBUG)
-        cache_root = tmp_path / "cache"
-        cache_root.mkdir()
-        monkeypatch.setattr("podcastify.config.Config.CACHE_ROOT", cache_root)
-        MediaProcessor.clear_cache()
-        error = subprocess.CalledProcessError(1, "ffprobe")
-        error.stderr = "Invalid data found when processing input"
-        mocker.patch(
-            "podcastify.media.subprocess.run",
-            side_effect=error,
-        )
-        result = MediaProcessor.get_duration_seconds(mock_mp3)
-        assert result is None
-        assert any("Invalid data found when processing input" in record.message for record in caplog.records)
-        assert any("exit 1" in record.message for record in caplog.records)
-
-    def test_called_process_error_with_empty_stderr(self, mocker, mock_mp3, tmp_path, monkeypatch, caplog):
-        """CalledProcessError with empty stderr should log placeholder."""
-        import logging
-
-        caplog.set_level(logging.DEBUG)
-        cache_root = tmp_path / "cache"
-        cache_root.mkdir()
-        monkeypatch.setattr("podcastify.config.Config.CACHE_ROOT", cache_root)
-        MediaProcessor.clear_cache()
-        error = subprocess.CalledProcessError(1, "ffprobe")
-        error.stderr = ""
-        mocker.patch(
-            "podcastify.media.subprocess.run",
-            side_effect=error,
-        )
-        result = MediaProcessor.get_duration_seconds(mock_mp3)
-        assert result is None
-        assert any("<no stderr>" in record.message for record in caplog.records)
-
-    def test_stream_fallback_on_empty_format_duration(self, mocker, mock_mp3):
-        """When format=duration is empty, fallback to stream=duration."""
-        MediaProcessor.clear_cache()
-        # First call (format=duration) returns empty, second call (stream fallback) returns duration
-        mocker.patch(
-            "podcastify.media.subprocess.run",
-            side_effect=[
-                mocker.Mock(stdout="", stderr=""),
-                mocker.Mock(stdout="1234.5\n", stderr=""),
-            ],
-        )
-        result = MediaProcessor.get_duration_seconds(mock_mp3)
-        assert result == 1234.5
-
-    def test_stream_fallback_failure_returns_none(self, mocker, mock_mp3, tmp_path, monkeypatch, caplog):
-        """When both format and stream durations fail, return None."""
-        import logging
-
-        caplog.set_level(logging.DEBUG)
-        cache_root = tmp_path / "cache"
-        cache_root.mkdir()
-        monkeypatch.setattr("podcastify.config.Config.CACHE_ROOT", cache_root)
-        MediaProcessor.clear_cache()
-        # First call (format=duration) returns empty, second call (stream fallback) fails
-        mocker.patch(
-            "podcastify.media.subprocess.run",
-            side_effect=[
-                mocker.Mock(stdout="", stderr=""),
-                subprocess.CalledProcessError(1, "ffprobe"),
-            ],
-        )
-        result = MediaProcessor.get_duration_seconds(mock_mp3)
-        assert result is None
-        assert any("<no duration data>" in record.message for record in caplog.records)
-        assert any("<exit 1> ffprobe: <no stderr>" in record.message for record in caplog.records)
-
-    def test_stream_fallback_caches_success(self, mocker, mock_mp3):
-        """Stream fallback result should be cached."""
-        MediaProcessor.clear_cache()
-        mocker.patch(
-            "podcastify.media.subprocess.run",
-            side_effect=[
-                mocker.Mock(stdout="", stderr=""),
-                mocker.Mock(stdout="999.0\n", stderr=""),
-            ],
-        )
-        result1 = MediaProcessor.get_duration_seconds(mock_mp3)
-        assert result1 == 999.0
-        # Second call should hit cache, no additional calls
-        proc_mock = mocker.patch(
-            "podcastify.media.subprocess.run",
-            return_value=mocker.Mock(stdout="should-not-be-called", stderr=""),
-        )
-        result2 = MediaProcessor.get_duration_seconds(mock_mp3)
-        assert result2 == 999.0
-        proc_mock.assert_not_called()
-
-    def test_stream_fallback_value_error_returns_none(self, mocker, mock_mp3, tmp_path, monkeypatch, caplog):
-        """Malformed stream-duration string (ValueError) is folded into the final WARN."""
-        import logging
-
-        caplog.set_level(logging.DEBUG)
-        cache_root = tmp_path / "cache"
-        cache_root.mkdir()
-        monkeypatch.setattr("podcastify.config.Config.CACHE_ROOT", cache_root)
-        MediaProcessor.clear_cache()
-        mocker.patch(
-            "podcastify.media.subprocess.run",
-            side_effect=[
-                mocker.Mock(stdout="", stderr=""),
-                mocker.Mock(stdout="N/A\n", stderr=""),
-            ],
-        )
-        result = MediaProcessor.get_duration_seconds(mock_mp3)
-        assert result is None
-        assert any("<no duration data>" in record.message for record in caplog.records)
-        assert any("could not convert string to float" in record.message for record in caplog.records)
-
-    def test_stream_fallback_success_persists_to_disk(self, mocker, mock_mp3, tmp_path, monkeypatch):
-        """A successfully-resolved fallback duration is written to the on-disk cache."""
-        cache_root = tmp_path / "cache"
-        cache_root.mkdir()
-        monkeypatch.setattr("podcastify.config.Config.CACHE_ROOT", cache_root)
-        MediaProcessor.clear_cache()
-        mocker.patch(
-            "podcastify.media.subprocess.run",
-            side_effect=[
-                mocker.Mock(stdout="", stderr=""),
-                mocker.Mock(stdout="555.5\n", stderr=""),
-            ],
-        )
-        result = MediaProcessor.get_duration_seconds(mock_mp3)
-        assert result == 555.5
-
-        cache_file = cache_root / ".podcastify-cache.json"
-        assert cache_file.exists()
-        content = cache_file.read_text(encoding="utf-8")
-        assert "555.5" in content
-        assert str(mock_mp3) in content
+def _warnings(caplog):
+    return [r.message for r in caplog.records if r.levelname == "WARNING"]
 
 
 def _restart_process():
     MediaProcessor._duration_cache.clear()
-    MediaProcessor._unpersisted.clear()
     MediaProcessor._disk_loaded = False
 
 
-class TestCacheRobustness:
-    @pytest.fixture
-    def cache_file(self, tmp_path, monkeypatch):
-        cache_root = tmp_path / "cache"
-        cache_root.mkdir()
-        monkeypatch.setattr("podcastify.config.Config.CACHE_ROOT", cache_root)
-        MediaProcessor.clear_cache()
-        return cache_root / ".podcastify-cache.json"
+@pytest.fixture
+def cache_file(tmp_path, monkeypatch):
+    cache_root = tmp_path / "cache"
+    cache_root.mkdir()
+    monkeypatch.setattr("podcastify.config.Config.CACHE_ROOT", cache_root)
+    MediaProcessor.clear_cache()
+    return cache_root / ".podcastify-cache.json"
 
-    def test_timeout_is_cached_in_memory_only(self, mocker, mock_mp3, cache_file):
-        run = mocker.patch(
-            "podcastify.media.subprocess.run",
-            side_effect=subprocess.TimeoutExpired("ffprobe", 30),
-        )
+
+@pytest.fixture
+def tag_reads(mocker):
+    return mocker.spy(TinyTag, "get")
+
+
+class TestDurationPerFormat:
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "cbr.mp3",
+            "cbr-noxing.mp3",
+            "vbr-xing.mp3",
+            "id3-cover.mp3",
+            "tone.m4a",
+            "tone.mp4",
+            "tone.ogg",
+            "tone.opus",
+        ],
+    )
+    def test_reads_the_encoded_length(self, audio_fixture, name):
+        assert MediaProcessor.get_duration_seconds(audio_fixture(name)) == pytest.approx(1.0, abs=0.1)
+
+    def test_truncated_file_with_xing_header_reports_the_full_length(self, audio_fixture):
+        assert MediaProcessor.get_duration_seconds(audio_fixture("truncated.mp3")) == pytest.approx(1.0, abs=0.1)
+
+
+class TestGuards:
+    def test_missing_file_returns_none(self):
+        assert MediaProcessor.get_duration_seconds(Path("/nonexistent/file.mp3")) is None
+
+    def test_zero_byte_file_returns_none(self, audio_fixture, caplog):
+        assert MediaProcessor.get_duration_seconds(audio_fixture("zero-byte.mp3")) is None
+        assert _warnings(caplog) == ["Failed to get duration for zero-byte.mp3: <zero-byte file>"]
+
+    def test_small_garbage_file_returns_none(self, audio_fixture):
+        assert MediaProcessor.get_duration_seconds(audio_fixture("garbage.mp3")) is None
+
+    def test_large_garbage_file_that_parses_as_a_short_frame_returns_none(self, tmp_path, caplog):
+        rng = random.Random(46)
+        garbage = tmp_path / "garbage.mp3"
+        garbage.write_bytes(bytes(rng.getrandbits(8) for _ in range(200000)))
+        assert TinyTag.get(str(garbage)).duration < 1.0
+        assert MediaProcessor.get_duration_seconds(garbage) is None
+        warnings = _warnings(caplog)
+        assert len(warnings) == 1
+        assert warnings[0].startswith("Failed to get duration for garbage.mp3: <implausible duration 0.0")
+
+    def test_short_duration_is_kept_for_a_small_file(self, mocker, mock_mp3):
+        mocker.patch("podcastify.media.TinyTag.get", return_value=mocker.Mock(duration=0.5))
+        assert MediaProcessor.get_duration_seconds(mock_mp3) == 0.5
+
+    def test_one_second_is_kept_for_a_large_file(self, mocker, tmp_path):
+        big = tmp_path / "big.mp3"
+        big.write_bytes(b"\x00" * 100 * 1024)
+        mocker.patch("podcastify.media.TinyTag.get", return_value=mocker.Mock(duration=1.0))
+        assert MediaProcessor.get_duration_seconds(big) == 1.0
+
+    def test_short_duration_is_rejected_at_the_size_threshold(self, mocker, tmp_path):
+        big = tmp_path / "big.mp3"
+        big.write_bytes(b"\x00" * 100 * 1024)
+        mocker.patch("podcastify.media.TinyTag.get", return_value=mocker.Mock(duration=0.99))
+        assert MediaProcessor.get_duration_seconds(big) is None
+
+    @pytest.mark.parametrize("value", [None, 0, 0.0, -3.5, float("nan"), float("inf"), float("-inf")])
+    def test_unusable_duration_returns_none(self, mocker, mock_mp3, caplog, value):
+        mocker.patch("podcastify.media.TinyTag.get", return_value=mocker.Mock(duration=value))
+        assert MediaProcessor.get_duration_seconds(mock_mp3) is None
+        assert len(_warnings(caplog)) == 1
+
+
+class TestReadErrors:
+    @pytest.mark.parametrize(
+        "error, message",
+        [
+            (TinyTagException("File is not a supported format"), "File is not a supported format"),
+            (OSError("Input/output error"), "Input/output error"),
+            (ValueError(), "ValueError"),
+        ],
+    )
+    def test_exception_returns_none_and_logs_the_message(self, mocker, mock_mp3, caplog, error, message):
+        mocker.patch("podcastify.media.TinyTag.get", side_effect=error)
+        assert MediaProcessor.get_duration_seconds(mock_mp3) is None
+        assert _warnings(caplog) == [f"Failed to get duration for dummy.mp3: {message}"]
+
+    def test_failure_is_warned_once_per_file(self, mocker, mock_mp3, caplog):
+        get = mocker.patch("podcastify.media.TinyTag.get", side_effect=TinyTagException("bad"))
         assert MediaProcessor.get_duration_seconds(mock_mp3) is None
         assert MediaProcessor.get_duration_seconds(mock_mp3) is None
-        assert run.call_count == 1
-        assert not cache_file.exists() or str(mock_mp3) not in cache_file.read_text(encoding="utf-8")
+        assert get.call_count == 1
+        assert len(_warnings(caplog)) == 1
 
-    def test_timeout_is_retried_in_the_next_process(self, mocker, mock_mp3, cache_file):
-        mocker.patch(
-            "podcastify.media.subprocess.run",
-            side_effect=subprocess.TimeoutExpired("ffprobe", 30),
-        )
-        MediaProcessor.get_duration_seconds(mock_mp3)
+    def test_unsupported_extension_returns_none(self, tmp_path, caplog):
+        notes = tmp_path / "notes.txt"
+        notes.write_text("not audio", encoding="utf-8")
+        assert MediaProcessor.get_duration_seconds(notes) is None
+        assert len(_warnings(caplog)) == 1
+
+
+class TestCache:
+    def test_cache_hit_skips_the_read(self, audio_fixture, tag_reads):
+        path = audio_fixture("cbr.mp3")
+        first = MediaProcessor.get_duration_seconds(path)
+        second = MediaProcessor.get_duration_seconds(path)
+        assert first == second
+        assert tag_reads.call_count == 1
+
+    def test_cache_miss_on_mtime_change(self, audio_fixture, tag_reads):
+        path = audio_fixture("cbr.mp3")
+        MediaProcessor.get_duration_seconds(path)
+        stat = path.stat()
+        os.utime(path, (stat.st_atime, stat.st_mtime + 10))
+        MediaProcessor.get_duration_seconds(path)
+        assert tag_reads.call_count == 2
+
+    def test_failure_is_cached(self, audio_fixture, tag_reads):
+        path = audio_fixture("garbage.mp3")
+        assert MediaProcessor.get_duration_seconds(path) is None
+        assert MediaProcessor.get_duration_seconds(path) is None
+        assert tag_reads.call_count == 1
+
+    def test_failure_is_persisted(self, audio_fixture, cache_file):
+        path = audio_fixture("garbage.mp3")
+        MediaProcessor.get_duration_seconds(path)
+        saved = json.loads(cache_file.read_text(encoding="utf-8"))
+        assert list(saved["durations"].values()) == [None]
+
+    def test_disk_cache_persists(self, audio_fixture, cache_file, tag_reads):
+        path = audio_fixture("cbr.mp3")
+        duration = MediaProcessor.get_duration_seconds(path)
         _restart_process()
-        run = mocker.patch(
-            "podcastify.media.subprocess.run",
-            return_value=mocker.Mock(stdout="77.0\n", stderr=""),
-        )
-        assert MediaProcessor.get_duration_seconds(mock_mp3) == 77.0
-        assert run.call_count == 1
+        tag_reads.reset_mock()
+        assert MediaProcessor.get_duration_seconds(path) == duration
+        tag_reads.assert_not_called()
 
-    def test_timeout_is_not_saved_when_other_entries_are(self, mocker, tmp_path, cache_file):
-        slow = tmp_path / "slow.mp3"
-        fast = tmp_path / "fast.mp3"
-        slow.write_bytes(b"\x00" * 64)
-        fast.write_bytes(b"\x00" * 64)
+    def test_persist_false_keeps_the_disk_cache_untouched(self, audio_fixture, cache_file):
+        MediaProcessor.get_duration_seconds(audio_fixture("cbr.mp3"), persist=False)
+        assert not cache_file.exists()
 
-        def fake_run(args, **kwargs):
-            if args[-1] == str(slow):
-                raise subprocess.TimeoutExpired("ffprobe", 30)
-            return mocker.Mock(stdout="12.0\n", stderr="")
-
-        mocker.patch("podcastify.media.subprocess.run", side_effect=fake_run)
-        MediaProcessor.warm_durations_parallel([slow, fast])
+    def test_save_writes_the_format_version(self, audio_fixture, cache_file):
+        MediaProcessor.get_duration_seconds(audio_fixture("cbr.mp3"))
         saved = json.loads(cache_file.read_text(encoding="utf-8"))
-        assert [k.rsplit("|", 1)[0] for k in saved] == [str(fast)]
+        assert saved["version"] == MediaProcessor.CACHE_VERSION
+        assert len(saved["durations"]) == 1
 
-    def test_other_failures_are_still_persisted(self, mocker, mock_mp3, cache_file):
-        mocker.patch(
-            "podcastify.media.subprocess.run",
-            side_effect=subprocess.CalledProcessError(1, "ffprobe"),
-        )
-        MediaProcessor.get_duration_seconds(mock_mp3)
+    def test_cache_version_was_bumped(self):
+        assert MediaProcessor.CACHE_VERSION >= 2
+
+    def test_old_format_entries_are_ignored_and_files_are_read_again(self, audio_fixture, cache_file, tag_reads):
+        path = audio_fixture("cbr.mp3")
+        old_entry = {f"{path}|{path.stat().st_mtime}": 9999.0}
+        cache_file.write_text(json.dumps(old_entry), encoding="utf-8")
+        assert MediaProcessor.get_duration_seconds(path) == pytest.approx(1.0, abs=0.1)
+        assert tag_reads.call_count == 1
         saved = json.loads(cache_file.read_text(encoding="utf-8"))
-        assert list(saved.values()) == [None]
+        assert saved["version"] == MediaProcessor.CACHE_VERSION
+        assert 9999.0 not in saved["durations"].values()
+
+    def test_entries_from_another_version_are_ignored(self, audio_fixture, cache_file, tag_reads):
+        path = audio_fixture("cbr.mp3")
+        stale = {"version": MediaProcessor.CACHE_VERSION + 1, "durations": {f"{path}|{path.stat().st_mtime}": 9999.0}}
+        cache_file.write_text(json.dumps(stale), encoding="utf-8")
+        assert MediaProcessor.get_duration_seconds(path) == pytest.approx(1.0, abs=0.1)
+        assert tag_reads.call_count == 1
+
+    def test_current_version_entries_are_used(self, audio_fixture, cache_file, tag_reads):
+        path = audio_fixture("cbr.mp3")
+        current = {"version": MediaProcessor.CACHE_VERSION, "durations": {f"{path}|{path.stat().st_mtime}": 123.0}}
+        cache_file.write_text(json.dumps(current), encoding="utf-8")
+        assert MediaProcessor.get_duration_seconds(path) == 123.0
+        tag_reads.assert_not_called()
+
+    def test_legacy_cache_migration(self, tmp_path, monkeypatch, cache_file):
+        public_root = tmp_path / "public"
+        public_root.mkdir()
+        monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", public_root)
+        legacy_cache = public_root / ".podcastify-cache.json"
+        legacy_cache.write_text('{"path|123.45": 567.89}', encoding="utf-8")
+
+        MediaProcessor._load_disk_cache()
+
+        assert not legacy_cache.exists()
+        assert "path|123.45" in cache_file.read_text(encoding="utf-8")
+        assert MediaProcessor._duration_cache == {}
+
+    def test_migrated_legacy_cache_is_replaced_by_the_new_format(
+        self, audio_fixture, tmp_path, monkeypatch, cache_file
+    ):
+        public_root = tmp_path / "public"
+        public_root.mkdir()
+        monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", public_root)
+        path = audio_fixture("cbr.mp3")
+        legacy = public_root / ".podcastify-cache.json"
+        legacy.write_text(json.dumps({f"{path}|{path.stat().st_mtime}": 9999.0}), encoding="utf-8")
+
+        assert MediaProcessor.get_duration_seconds(path) == pytest.approx(1.0, abs=0.1)
+
+        saved = json.loads(cache_file.read_text(encoding="utf-8"))
+        assert saved["version"] == MediaProcessor.CACHE_VERSION
+        assert list(saved["durations"].values()) != [9999.0]
+
+    def test_cache_pruning_removes_nonexistent_files(self, tmp_path, cache_file):
+        existing_file = tmp_path / "exists.mp3"
+        existing_file.write_bytes(b"\x00" * 1024)
+        nonexistent_file = tmp_path / "missing.mp3"
+        MediaProcessor._duration_cache[(str(existing_file), 123.45)] = 100.0
+        MediaProcessor._duration_cache[(str(nonexistent_file), 456.78)] = 200.0
+
+        MediaProcessor._save_disk_cache()
+
+        content = cache_file.read_text(encoding="utf-8")
+        assert str(existing_file) in content
+        assert str(nonexistent_file) not in content
 
     def test_save_keeps_newest_mtime_per_path(self, mock_mp3, cache_file):
         path = str(mock_mp3)
@@ -467,20 +281,7 @@ class TestCacheRobustness:
         MediaProcessor._duration_cache[(path, 200.0)] = 2.0
         MediaProcessor._save_disk_cache()
         saved = json.loads(cache_file.read_text(encoding="utf-8"))
-        assert saved == {f"{path}|300.0": 3.0}
-
-    def test_save_drops_older_entries_when_newest_is_a_timeout(self, mock_mp3, cache_file):
-        path = str(mock_mp3)
-        MediaProcessor._duration_cache[(path, 100.0)] = 1.0
-        MediaProcessor._duration_cache[(path, 200.0)] = None
-        MediaProcessor._unpersisted.add((path, 200.0))
-        MediaProcessor._save_disk_cache()
-        assert json.loads(cache_file.read_text(encoding="utf-8")) == {}
-
-    def test_clear_cache_forgets_unpersisted_keys(self):
-        MediaProcessor._unpersisted.add(("x", 1.0))
-        MediaProcessor.clear_cache()
-        assert MediaProcessor._unpersisted == set()
+        assert saved["durations"] == {f"{path}|300.0": 3.0}
 
     @pytest.mark.parametrize("content", ['["a"]', '"text"', "42"])
     def test_non_dict_cache_is_ignored(self, cache_file, content):
@@ -488,18 +289,24 @@ class TestCacheRobustness:
         MediaProcessor._load_disk_cache()
         assert MediaProcessor._duration_cache == {}
 
+    @pytest.mark.parametrize("durations", [["a"], "text", 42, None])
+    def test_non_dict_durations_are_ignored(self, cache_file, durations):
+        payload = {"version": MediaProcessor.CACHE_VERSION, "durations": durations}
+        cache_file.write_text(json.dumps(payload), encoding="utf-8")
+        MediaProcessor._load_disk_cache()
+        assert MediaProcessor._duration_cache == {}
+
     def test_malformed_keys_are_skipped_and_good_keys_kept(self, cache_file):
-        cache_file.write_text(
-            json.dumps({"no-separator": 1.0, "/a.mp3|not-a-float": 2.0, "/b.mp3|5.5": 3.0}),
-            encoding="utf-8",
-        )
+        durations = {"no-separator": 1.0, "/a.mp3|not-a-float": 2.0, "/b.mp3|5.5": 3.0}
+        payload = {"version": MediaProcessor.CACHE_VERSION, "durations": durations}
+        cache_file.write_text(json.dumps(payload), encoding="utf-8")
         MediaProcessor._load_disk_cache()
         assert MediaProcessor._duration_cache == {("/b.mp3", 5.5): 3.0}
 
     def test_corrupt_cache_warns_with_reason(self, cache_file, caplog):
         cache_file.write_text("{not json", encoding="utf-8")
         MediaProcessor._load_disk_cache()
-        warnings = [r.message for r in caplog.records if r.levelname == "WARNING"]
+        warnings = _warnings(caplog)
         assert len(warnings) == 1
         assert warnings[0].startswith("Failed to load duration cache: ")
         assert MediaProcessor._duration_cache == {}
@@ -511,8 +318,7 @@ class TestCacheRobustness:
         legacy = public_root / ".podcastify-cache.json"
         legacy.write_text("{not json", encoding="utf-8")
         MediaProcessor._load_disk_cache()
-        warnings = [r.message for r in caplog.records if r.levelname == "WARNING"]
-        assert warnings[0].startswith("Failed to migrate legacy cache: ")
+        assert _warnings(caplog)[0].startswith("Failed to migrate legacy cache: ")
         assert legacy.exists()
         assert not cache_file.exists()
 
@@ -535,8 +341,7 @@ class TestCacheRobustness:
         MediaProcessor._duration_cache[(str(mock_mp3), 1.0)] = 2.0
         mocker.patch("pathlib.Path.write_text", side_effect=OSError("disk full"))
         MediaProcessor._save_disk_cache()
-        warnings = [r.message for r in caplog.records if r.levelname == "WARNING"]
-        assert warnings == ["Failed to save duration cache: disk full"]
+        assert _warnings(caplog) == ["Failed to save duration cache: disk full"]
 
 
 class TestStatFailures:
@@ -552,55 +357,39 @@ class TestStatFailures:
         fake.exists.return_value = True
         fake.stat.side_effect = [mocker.Mock(st_mtime=1.0), OSError("gone")]
         assert MediaProcessor.get_duration_seconds(fake, persist=False) is None
-        warnings = [r.message for r in caplog.records if r.levelname == "WARNING"]
-        assert warnings == ["Failed to get duration for a.mp3: <size check failed>"]
+        assert _warnings(caplog) == ["Failed to get duration for a.mp3: <size check failed>"]
         assert MediaProcessor._duration_cache[(str(fake), 1.0)] is None
 
-    def test_stream_fallback_timeout_reason_is_logged(self, mocker, mock_mp3, caplog):
-        mocker.patch(
-            "podcastify.media.subprocess.run",
-            side_effect=[
-                mocker.Mock(stdout="\n", stderr=""),
-                subprocess.TimeoutExpired(cmd="ffprobe", timeout=10),
-            ],
-        )
-        assert MediaProcessor.get_duration_seconds(mock_mp3, persist=False) is None
-        warnings = [r.message for r in caplog.records if r.levelname == "WARNING"]
-        assert warnings == [
-            "Failed to get duration for dummy.mp3: <no duration data> (Command 'ffprobe' timed out after 10 seconds)"
-        ]
 
+class TestWarmDurations:
+    def test_skips_missing_files(self, tmp_path, tag_reads):
+        MediaProcessor.warm_durations([tmp_path / "missing.mp3"])
+        tag_reads.assert_not_called()
 
-class TestWarmDurationsParallel:
-    @pytest.fixture
-    def run(self, mocker):
-        return mocker.patch(
-            "podcastify.media.subprocess.run",
-            return_value=mocker.Mock(stdout="60.0\n", stderr=""),
-        )
-
-    def test_skips_missing_files(self, tmp_path, run):
-        MediaProcessor.warm_durations_parallel([tmp_path / "missing.mp3"])
-        run.assert_not_called()
-
-    def test_skips_files_whose_stat_fails(self, mocker, run):
+    def test_skips_files_whose_stat_fails(self, mocker, tag_reads):
         fake = mocker.Mock(spec=Path)
         fake.exists.return_value = True
         fake.stat.side_effect = OSError("gone")
-        MediaProcessor.warm_durations_parallel([fake])
-        run.assert_not_called()
+        MediaProcessor.warm_durations([fake])
+        tag_reads.assert_not_called()
 
-    def test_skips_files_already_cached(self, mock_mp3, run):
+    def test_skips_files_already_cached(self, mock_mp3, tag_reads):
         MediaProcessor._duration_cache[(str(mock_mp3), mock_mp3.stat().st_mtime)] = 12.0
-        MediaProcessor.warm_durations_parallel([mock_mp3])
-        run.assert_not_called()
+        MediaProcessor.warm_durations([mock_mp3])
+        tag_reads.assert_not_called()
 
-    def test_probes_uncached_files_once_each(self, tmp_path, run):
-        paths = []
-        for n in range(3):
-            p = tmp_path / f"ep{n}.mp3"
-            p.write_bytes(b"\x00" * 64)
-            paths.append(p)
-        MediaProcessor.warm_durations_parallel(paths)
-        assert run.call_count == 3
-        assert all(MediaProcessor._duration_cache[(str(p), p.stat().st_mtime)] == 60.0 for p in paths)
+    def test_reads_uncached_files_once_each_and_saves_once(self, mocker, audio_fixture, cache_file, tag_reads):
+        paths = [audio_fixture(name) for name in ("cbr.mp3", "tone.m4a", "tone.ogg")]
+        save = mocker.spy(MediaProcessor, "_save_disk_cache")
+        MediaProcessor.warm_durations(paths)
+        assert tag_reads.call_count == 3
+        assert save.call_count == 1
+        saved = json.loads(cache_file.read_text(encoding="utf-8"))
+        assert len(saved["durations"]) == 3
+
+    def test_a_failing_file_does_not_stop_the_others(self, audio_fixture, caplog):
+        paths = [audio_fixture("garbage.mp3"), audio_fixture("cbr.mp3")]
+        caplog.set_level(logging.WARNING)
+        MediaProcessor.warm_durations(paths)
+        assert MediaProcessor._duration_cache[(str(paths[0]), paths[0].stat().st_mtime)] is None
+        assert MediaProcessor._duration_cache[(str(paths[1]), paths[1].stat().st_mtime)] == pytest.approx(1.0, abs=0.1)

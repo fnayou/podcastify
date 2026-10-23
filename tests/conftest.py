@@ -2,7 +2,6 @@
 """Shared fixtures for podcastify tests."""
 
 import logging
-import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -45,9 +44,7 @@ def _reset_media_state():
     from podcastify.media import MediaProcessor
 
     MediaProcessor._duration_cache.clear()
-    MediaProcessor._unpersisted.clear()
     MediaProcessor._disk_loaded = False
-    MediaProcessor._ffprobe_missing_warned = False
 
 
 @pytest.fixture(autouse=True)
@@ -58,13 +55,26 @@ def reset_media_state():
     _reset_media_state()
 
 
-@pytest.fixture(autouse=True)
-def mock_ffprobe(mocker):
-    """Stub ffprobe so no test depends on the real binary."""
-    return mocker.patch(
-        "podcastify.media.subprocess.run",
-        return_value=subprocess.CompletedProcess(args=["ffprobe"], returncode=0, stdout="42.0\n", stderr=""),
-    )
+AUDIO_DIR = Path(__file__).parent / "fixtures" / "audio"
+
+
+@pytest.fixture
+def audio_fixture(tmp_path):
+    """Copy a committed audio fixture into tmp_path and return its path."""
+
+    def copy(name):
+        target = tmp_path / "media" / name
+        target.parent.mkdir(exist_ok=True)
+        target.write_bytes((AUDIO_DIR / name).read_bytes())
+        return target
+
+    return copy
+
+
+@pytest.fixture
+def fixed_duration(mocker):
+    """Make every duration read return 42.0 s for feed output tests."""
+    return mocker.patch("podcastify.media.TinyTag.get", return_value=mocker.Mock(duration=42.0))
 
 
 GOLDEN_NOW = datetime(2030, 1, 2, 3, 4, 5, tzinfo=timezone.utc)

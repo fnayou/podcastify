@@ -1,24 +1,24 @@
 import json
 import logging
-import subprocess
-import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import math
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Tuple
+
+from tinytag import TinyTag
 
 from podcastify.config import Config
 
 logger = logging.getLogger(__name__)
 
+MIN_PLAUSIBLE_SECONDS = 1.0
+IMPLAUSIBLE_MIN_BYTES = 100 * 1024
+
 
 class MediaProcessor:
+    CACHE_VERSION = 2
+
     _duration_cache: Dict[Tuple[str, float], Optional[float]] = {}
-    _unpersisted: Set[Tuple[str, float]] = set()
     _disk_loaded = False
-    _ffprobe_missing_warned = False
-    # Guards _duration_cache against concurrent mutation/iteration when
-    # warm_durations_parallel runs probes across a ThreadPoolExecutor.
-    _lock = threading.Lock()
 
     @classmethod
     def _cache_path(cls) -> Path:
@@ -32,29 +32,31 @@ class MediaProcessor:
     def _load_disk_cache(cls) -> None:
         if cls._disk_loaded:
             return
-        with cls._lock:
-            # Double-checked under the lock: parallel probes all call this.
-            if cls._disk_loaded:
-                return
-            cls._disk_loaded = True
+        cls._disk_loaded = True
 
-            cls._migrate_legacy_cache()
+        cls._migrate_legacy_cache()
 
-            path = cls._cache_path()
-            if not path.exists():
-                return
-            try:
-                data = json.loads(path.read_text(encoding="utf-8"))
-                if isinstance(data, dict):
-                    for key, val in data.items():
-                        parts = key.rsplit("|", 1)
-                        if len(parts) == 2:
-                            try:
-                                cls._duration_cache[(parts[0], float(parts[1]))] = val
-                            except ValueError:
-                                continue
-            except (OSError, json.JSONDecodeError) as e:
-                logger.warning(f"Failed to load duration cache: {e}")
+        path = cls._cache_path()
+        if not path.exists():
+            return
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as e:
+            logger.warning(f"Failed to load duration cache: {e}")
+            return
+        if not isinstance(data, dict) or data.get("version") != cls.CACHE_VERSION:
+            logger.info(f"Ignoring duration cache in an older format: {path}")
+            return
+        durations = data.get("durations")
+        if not isinstance(durations, dict):
+            return
+        for key, val in durations.items():
+            parts = key.rsplit("|", 1)
+            if len(parts) == 2:
+                try:
+                    cls._duration_cache[(parts[0], float(parts[1]))] = val
+                except ValueError:
+                    continue
 
     @classmethod
     def _migrate_legacy_cache(cls) -> None:
@@ -77,72 +79,44 @@ class MediaProcessor:
     @classmethod
     def _save_disk_cache(cls) -> None:
         path = cls._cache_path()
-        # Snapshot under the lock so a concurrent probe inserting a key cannot
-        # trigger "dictionary changed size during iteration".
-        with cls._lock:
-            items = list(cls._duration_cache.items())
-            unpersisted = set(cls._unpersisted)
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
             newest: Dict[str, Tuple[float, Optional[float]]] = {}
-            for (file_name, mtime), v in items:
+            for (file_name, mtime), v in cls._duration_cache.items():
                 if file_name not in newest or mtime > newest[file_name][0]:
                     newest[file_name] = (mtime, v)
-            serializable = {}
+            durations = {}
             for file_name, (mtime, v) in newest.items():
                 file_path = Path(file_name)
-                if (file_name, mtime) not in unpersisted and file_path.exists():
-                    serializable[cls._cache_key(file_path, mtime)] = v
+                if file_path.exists():
+                    durations[cls._cache_key(file_path, mtime)] = v
             # Atomic write: avoids a half-written cache if multiple saves race.
             tmp = path.with_suffix(path.suffix + ".tmp")
-            tmp.write_text(json.dumps(serializable), encoding="utf-8")
+            tmp.write_text(json.dumps({"version": cls.CACHE_VERSION, "durations": durations}), encoding="utf-8")
             tmp.replace(path)
-            logger.debug(f"Cache save: {len(serializable)} entries written to {path}")
+            logger.debug(f"Cache save: {len(durations)} entries written to {path}")
         except OSError as e:
             logger.warning(f"Failed to save duration cache: {e}")
 
     @classmethod
     def clear_cache(cls) -> None:
         cls._duration_cache.clear()
-        cls._unpersisted.clear()
         cls._disk_loaded = False
-        cls._ffprobe_missing_warned = False
         path = cls._cache_path()
         if path.exists():
             path.unlink(missing_ok=True)
 
     @classmethod
-    def _warn_ffprobe_missing(cls) -> None:
-        with cls._lock:
-            if cls._ffprobe_missing_warned:
-                return
-            cls._ffprobe_missing_warned = True
-        logger.warning("ffprobe not found; publishing feeds without episode durations")
-
-    @classmethod
-    def _cache_failure(cls, key: Tuple[str, float], persist: bool = True) -> None:
-        with cls._lock:
-            cls._duration_cache[key] = None
+    def _store(cls, key: Tuple[str, float], duration: Optional[float], persist: bool) -> Optional[float]:
+        cls._duration_cache[key] = duration
         if persist:
             cls._save_disk_cache()
-        return None
+        return duration
 
     @classmethod
-    def _cache_timeout(cls, key: Tuple[str, float]) -> None:
-        with cls._lock:
-            cls._duration_cache[key] = None
-            cls._unpersisted.add(key)
-        return None
-
-    @classmethod
-    def _run_ffprobe(cls, mp3_path: Path, extra_args: List[str], timeout: int = 30) -> subprocess.CompletedProcess:
-        return subprocess.run(
-            ["ffprobe", "-v", "error", *extra_args, "-of", "default=nw=1:nk=1", str(mp3_path)],
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=timeout,
-        )
+    def _fail(cls, mp3_path: Path, key: Tuple[str, float], reason: str, persist: bool) -> None:
+        logger.warning(f"Failed to get duration for {mp3_path.name}: {reason}")
+        return cls._store(key, None, persist)
 
     @classmethod
     def get_duration_seconds(cls, mp3_path: Path, persist: bool = True) -> Optional[float]:
@@ -159,84 +133,31 @@ class MediaProcessor:
             logger.debug(f"Cache hit: {mp3_path.name} -> {cached}s")
             return cached
 
-        # Short-circuit zero-byte files
         try:
             file_size = mp3_path.stat().st_size
         except (OSError, FileNotFoundError):
-            logger.warning(f"Failed to get duration for {mp3_path.name}: <size check failed>")
-            return cls._cache_failure(key, persist=persist)
+            return cls._fail(mp3_path, key, "<size check failed>", persist)
 
         if file_size == 0:
-            logger.warning(f"Failed to get duration for {mp3_path.name}: <zero-byte file>")
-            return cls._cache_failure(key, persist=persist)
+            return cls._fail(mp3_path, key, "<zero-byte file>", persist)
 
         try:
-            logger.debug(f"ffprobe invocation: {mp3_path.name}")
-            result = cls._run_ffprobe(mp3_path, ["-show_entries", "format=duration"])
-            dur_str = result.stdout.strip()
-            if not dur_str:
-                dur, fallback_reason = cls._try_stream_duration_fallback(mp3_path)
-                if dur is not None:
-                    with cls._lock:
-                        cls._duration_cache[key] = dur
-                    if persist:
-                        cls._save_disk_cache()
-                    logger.debug(f"Resolved duration (stream fallback): {mp3_path.name} -> {dur}s")
-                    return dur
-                reason = fallback_reason or "<no duration data>"
-                logger.warning(f"Failed to get duration for {mp3_path.name}: <no duration data> ({reason})")
-                return cls._cache_failure(key, persist=persist)
-            dur = float(dur_str)
-            with cls._lock:
-                cls._duration_cache[key] = dur
-            if persist:
-                cls._save_disk_cache()
-            logger.debug(f"Resolved duration: {mp3_path.name} -> {dur}s")
-            return dur
-        except FileNotFoundError:
-            cls._warn_ffprobe_missing()
-            return None
-        except subprocess.CalledProcessError as e:
-            stderr_msg = e.stderr.strip() if e.stderr else "<no stderr>"
-            logger.warning(f"Failed to get duration for {mp3_path.name}: <exit {e.returncode}> ffprobe: {stderr_msg}")
-            return cls._cache_failure(key, persist=persist)
-        except subprocess.TimeoutExpired as e:
-            logger.warning(f"Failed to get duration for {mp3_path.name}: {e}")
-            return cls._cache_timeout(key)
-        except ValueError as e:
-            logger.warning(f"Failed to get duration for {mp3_path.name}: {e}")
-            return cls._cache_failure(key, persist=persist)
+            duration = TinyTag.get(str(mp3_path)).duration
+        except Exception as e:
+            return cls._fail(mp3_path, key, str(e) or type(e).__name__, persist)
+
+        if duration is None:
+            return cls._fail(mp3_path, key, "<no duration data>", persist)
+        if not math.isfinite(duration) or duration <= 0:
+            return cls._fail(mp3_path, key, f"<invalid duration {duration}>", persist)
+        if duration < MIN_PLAUSIBLE_SECONDS and file_size >= IMPLAUSIBLE_MIN_BYTES:
+            return cls._fail(mp3_path, key, f"<implausible duration {duration}s for {file_size} bytes>", persist)
+
+        logger.debug(f"Resolved duration: {mp3_path.name} -> {duration}s")
+        return cls._store(key, duration, persist)
 
     @classmethod
-    def _try_stream_duration_fallback(cls, mp3_path: Path) -> Tuple[Optional[float], Optional[str]]:
-        """Fallback: extract duration from audio stream when format=duration is empty.
-
-        Returns:
-            Tuple of (duration, reason). On success, reason is None.
-            On failure, reason describes the error.
-        """
-        try:
-            result = cls._run_ffprobe(
-                mp3_path,
-                ["-show_entries", "stream=duration", "-select_streams", "a:0"],
-                timeout=10,
-            )
-            dur_str = result.stdout.strip()
-            if not dur_str:
-                return None, "<no stream duration data>"
-            return float(dur_str), None
-        except subprocess.CalledProcessError as e:
-            stderr_msg = e.stderr.strip() if e.stderr else "<no stderr>"
-            reason = f"<exit {e.returncode}> ffprobe: {stderr_msg}"
-            return None, reason
-        except subprocess.TimeoutExpired as e:
-            return None, str(e)
-        except ValueError as e:
-            return None, str(e)
-
-    @classmethod
-    def warm_durations_parallel(cls, paths: List[Path], max_workers: int = 4) -> None:
-        need_probe = []
+    def warm_durations(cls, paths: List[Path]) -> None:
         cls._load_disk_cache()
         for mp3_path in paths:
             if not mp3_path.exists():
@@ -245,18 +166,8 @@ class MediaProcessor:
                 mtime = mp3_path.stat().st_mtime
             except OSError:
                 continue
-            key = (str(mp3_path), mtime)
-            if key not in cls._duration_cache:
-                need_probe.append(mp3_path)
-        if not need_probe:
-            return
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            # persist=False: workers only mutate the in-memory cache (under the
-            # lock). The disk cache is written once below, after all probes join,
-            # instead of N times mid-flight (was O(N^2) writes + the race window).
-            futures = {executor.submit(cls.get_duration_seconds, p, persist=False): p for p in need_probe}
-            for future in as_completed(futures):
-                future.result()
+            if (str(mp3_path), mtime) not in cls._duration_cache:
+                cls.get_duration_seconds(mp3_path, persist=False)
         cls._save_disk_cache()
 
     @staticmethod

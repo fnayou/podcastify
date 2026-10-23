@@ -13,6 +13,8 @@ PUBLISHED = datetime(2024, 1, 1, tzinfo=timezone.utc)
 IT = "{http://www.itunes.com/dtds/podcast-1.0.dtd}"
 ATOM = "{http://www.w3.org/2005/Atom}"
 
+pytestmark = pytest.mark.usefixtures("fixed_duration")
+
 
 def _channel(**fields):
     return PodcastChannelModel.model_validate({"title": "T", "description": "D", **fields})

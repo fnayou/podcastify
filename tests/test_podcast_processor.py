@@ -200,6 +200,7 @@ class TestProcessPodcast:
         assert any("Validated" in record.message for record in caplog.records)
 
 
+@pytest.mark.usefixtures("fixed_duration")
 class TestMissingEpisodeFiles:
     def _write_config(self, tmp_path, episodes):
         cfg = tmp_path / "myshow-podcast.yaml"
@@ -503,6 +504,7 @@ class TestEdgeCases:
         errors = [r.message for r in caplog.records if r.levelname == "ERROR"]
         assert errors == ["Config validation failed for myshow: missing podcast configuration"]
 
+    @pytest.mark.usefixtures("fixed_duration")
     def test_empty_channel_publishes_with_fallbacks(self, tmp_path, monkeypatch, caplog):
         cfg = _setup_show(tmp_path, monkeypatch)
         cfg.write_text(
