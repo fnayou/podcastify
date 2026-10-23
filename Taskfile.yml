@@ -5,7 +5,6 @@ dotenv: [".env", ".env.local"]
 vars:
   COMPOSE: docker compose
   SERVICE_NAME: podcastify
-  APP_SCRIPT: /app/app.py
   PUBLIC_DIR: ./public
   PODCASTS_DIR: ./podcasts
   LOG_LINES: 200

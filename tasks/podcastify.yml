@@ -15,10 +15,10 @@ tasks:
         echo "Generating RSS feeds..."
         if [ -n "$({{.COMPOSE}} ps -q {{.SERVICE_NAME}})" ]; then
           echo "Using running container."
-          {{.COMPOSE}} exec {{.SERVICE_NAME}} python {{.APP_SCRIPT}} generate
+          {{.COMPOSE}} exec {{.SERVICE_NAME}} /entrypoint.sh generate
         else
           echo "Starting temporary container."
-          {{.COMPOSE}} run --rm --entrypoint '' {{.SERVICE_NAME}} python {{.APP_SCRIPT}} generate
+          {{.COMPOSE}} run --rm {{.SERVICE_NAME}} generate
         fi
         echo "RSS generation completed."
 
@@ -29,9 +29,9 @@ tasks:
     cmds:
       - |
         if [ -n "$({{.COMPOSE}} ps -q {{.SERVICE_NAME}})" ]; then
-          {{.COMPOSE}} exec {{.SERVICE_NAME}} python {{.APP_SCRIPT}} generate
+          {{.COMPOSE}} exec {{.SERVICE_NAME}} /entrypoint.sh generate
         else
-          {{.COMPOSE}} run --rm --entrypoint '' {{.SERVICE_NAME}} python {{.APP_SCRIPT}} generate
+          {{.COMPOSE}} run --rm {{.SERVICE_NAME}} generate
         fi
 
   watch:
