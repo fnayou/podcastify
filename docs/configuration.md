@@ -23,9 +23,9 @@ categories:
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `name` | string | No | Podcast identifier. If omitted, derived from the filename. |
+| `name` | string | No | Optional. The filename is authoritative: the name before `-podcast.yaml` is always the identifier. A `name` that differs logs `Config name '<name>' differs from filename-derived name '<filename name>'; using '<filename name>'` and is ignored. |
 | `title` | string | Yes | Podcast title shown in podcast apps. |
-| `author-name` | string | Yes | Author/creator name. |
+| `author-name` | string | No | Author/creator name. Legacy alias: `author` is used as the author name when `author-name` is absent or empty. With neither, the feed has no author element. |
 | `author-email` | string | No | Contact email for the podcast owner. |
 | `description` | string | Yes | Short description of the podcast. |
 | `subtitle` | string | No | Brief subtitle for display in podcast apps. |
@@ -71,6 +71,8 @@ categories:
 ## Episodes
 
 If you omit the `episodes:` list, Podcastify auto-discovers all `.mp3`, `.m4a`, `.mp4`, `.ogg` and `.opus` files in `public/<name>/`, matched case-insensitively (`EP01.MP3` is found), sorted by modification time (newest first).
+
+A non-empty `episodes:` list turns auto-discovery off: only the listed files are published, and other files in `public/<name>/` are ignored until you add them to the list. An empty list (`episodes: []`) keeps discovery on.
 
 Each enclosure carries the MIME type of its extension: `audio/mpeg` (`.mp3`), `audio/x-m4a` (`.m4a`), `video/mp4` (`.mp4`), `audio/ogg` (`.ogg`) and `audio/opus` (`.opus`). Any other extension named in `episodes:` is published as `audio/mpeg`.
 

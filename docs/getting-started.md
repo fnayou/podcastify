@@ -35,11 +35,15 @@ cp /path/to/ep01.mp3 public/myshow/
 cp /path/to/cover.jpg public/myshow/
 ```
 
+The scaffold has no `episodes:` list, so every `.mp3`, `.m4a`, `.mp4`, `.ogg` and `.opus` file in `public/myshow/` is published, newest first. To pick files or set titles, add an `episodes:` list; a non-empty list turns auto-discovery off (see [Episodes](configuration.md#episodes)).
+
 ### 4. Generate feeds
 
 ```bash
 task podcastify:generate
 ```
+
+Run it again whenever you add files, or set `GENERATE_INTERVAL` to regenerate automatically (see [Automatic regeneration](runtime.md#automatic-regeneration)).
 
 ### 5. Subscribe
 
