@@ -2,23 +2,24 @@
 
 ## Status
 
-Accepted
+Accepted. Implemented: the cache lives under `CACHE_ROOT`, `MediaProcessor` drops
+entries for files that no longer exist when it saves, and a cache left in
+`PUBLIC_ROOT` is migrated on first load.
 
 ## Context
 
-`MediaProcessor` persists ffprobe results to
-`<PUBLIC_ROOT>/.podcastify-cache.json` (`podcastify/media.py:16-17`,
-`Config.CACHE_FILENAME` at `config.py:38`).
+`MediaProcessor` used to persist ffprobe results to
+`<PUBLIC_ROOT>/.podcastify-cache.json` (`Config.CACHE_FILENAME`).
 `PUBLIC_ROOT` (`/app/public`) is the directory Caddy serves
-(`docker/podcastify/Caddyfile:2`). Three problems:
+(`root * /app/public` in `docker/podcastify/Caddyfile`). At the time of this
+decision there were three problems:
 
-1. The cache file is web-reachable. `hide .*` in the shipped Caddyfile
-   (`Caddyfile:19`) returns 404 for direct requests, but the `docs/deployment.md`
-   Caddyfile snippet uses `hide .gitkeep`, which would expose it.
-2. Cache entries for deleted media are never pruned (`_save_disk_cache`
-   serializes the full in-memory dict, `media.py:45-53`), so the file grows
-   unbounded.
-3. `docs/deployment.md` recommends `read_only: true`; the cache only stays
+1. The cache file was web-reachable. `hide .*` in the shipped Caddyfile
+   returns 404 for direct requests, but the `docs/deployment.md` Caddyfile
+   snippet used `hide .gitkeep`, which would expose it.
+2. Cache entries for deleted media were never pruned (`_save_disk_cache`
+   serialized the full in-memory dict), so the file grew unbounded.
+3. `docs/deployment.md` recommends `read_only: true`; the cache only stayed
    writable because `public/` is a bind mount, an undocumented coupling.
 
 ## Decision
@@ -40,6 +41,6 @@ default, not a user setting, see ADR 0004). Keep the on-disk format and
 
 ## References
 
-- `podcastify/media.py:15-63`
-- `podcastify/config.py:38`
-- `docs/deployment.md:94-108`
+- `MediaProcessor` (`_cache_path`, `_migrate_legacy_cache`, `_save_disk_cache`) in `podcastify/media.py`
+- `Config.CACHE_ROOT` and `Config.CACHE_FILENAME` in `podcastify/config.py`
+- `docs/deployment.md`

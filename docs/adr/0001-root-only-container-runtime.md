@@ -2,7 +2,7 @@
 
 ## Status
 
-Superseded. The entrypoint now drops privileges via `PUID`/`PGID` with `su-exec` and supports a pinned non-root `user:`; see `docs/runtime.md`.
+Superseded by [0005](0005-puid-pgid-runtime.md): the entrypoint now drops privileges via `PUID`/`PGID` with `su-exec` and supports a pinned non-root `user:`.
 
 ## Context
 
@@ -28,4 +28,3 @@ Run the container as root — no `USER` directive and no chown logic in
 ## References
 
 - `docker/podcastify/Dockerfile`
-- `RELEASE_NOTES_v1.0.1.md`

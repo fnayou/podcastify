@@ -11,7 +11,7 @@ The variable controlling the in-container Caddy listen port was renamed from
 was introduced for the host-side mapping. The generator itself only ever reads
 `PUBLIC_BASE_URL`, `RUN_ON_START`, `PUBLISH_XML` and `LOG_LEVEL`, plus the
 internal path defaults of ADR 0004 (`podcastify/config.py`); it does not read
-any port variable. Caddy binds `{$SERVICE_PORT}` (`docker/podcastify/Caddyfile:1`).
+any port variable. Caddy binds `{$SERVICE_PORT}` (the site address in `docker/podcastify/Caddyfile`).
 
 After two reboots the docs drifted: `docs/deployment.md` still teaches `PORT`,
 which is silently ignored by the shipped image. This ADR fixes the contract so
@@ -55,8 +55,7 @@ migration note.
 
 ## References
 
-- `podcastify/config.py:20-24`
-- `docker/podcastify/Caddyfile:1`
-- `docker/podcastify/Dockerfile:23-28`
-- `docker-compose.yml:9-18`
-- `RELEASE_NOTES_v1.0.1.md`
+- `Config` and `_coerce_bool` in `podcastify/config.py`
+- site address in `docker/podcastify/Caddyfile`
+- `ENV` block of `docker/podcastify/Dockerfile`
+- `environment:` list of `docker-compose.yml`

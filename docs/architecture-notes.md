@@ -1,6 +1,6 @@
 # Architecture Notes (AI Agents)
 
-Supplement to `docs/architecture.md` — file:line map, invariants, and gotchas
+Supplement to `docs/architecture.md` — module map, invariants, and gotchas
 not covered there. Read both before proposing changes to `podcastify/`.
 
 ## Module map
@@ -13,7 +13,7 @@ not covered there. Read both before proposing changes to `podcastify/`.
 | `podcastify/logging_config.py` | `configure_logging` |
 | `podcastify/media.py` | `MediaProcessor` |
 | `podcastify/rss.py` | `RSSGenerator` |
-| `podcastify/cli.py` | `PodcastProcessor`, `build_parser`, `main` |
+| `podcastify/cli.py` | `PodcastProcessor`, `FeedWatcher`, `build_parser`, `main` |
 
 ## Invariants & gotchas
 
@@ -32,18 +32,24 @@ not covered there. Read both before proposing changes to `podcastify/`.
   fallbacks that need runtime data (`title` to the podcast name, `link` to
   `PUBLIC_BASE_URL`, episode `title` to the file stem). Unknown YAML keys are
   kept out of the feed and logged as warnings by `validate_podcast_config`
-  (parser.py).
+  (parser.py). The renderer declares the `itunes`, `content` and `atom`
+  namespaces, adds `atom:link rel="self"` (`PUBLIC_BASE_URL/<name>.xml`),
+  writes `itunes:explicit` as `true`/`false`, and leaves out optional tags whose
+  text is empty (`_add_optional`).
 - **Episode source priority**: an explicit `episodes:` list (validated via
   pydantic) wins over auto-scanning `public/<name>/` for `Config.MEDIA_TYPES`
   extensions, case-insensitive — `discover_episodes` (parser.py). The same map
   sets the enclosure `type` via `EpisodeManager.media_type`; unknown
   extensions default to `audio/mpeg`.
 - **Duration cache**: in-memory `_duration_cache` keyed by `(path, mtime)`,
-  persisted to `<CACHE_ROOT>/.podcastify-cache.json` (media.py). A new mtime
-  invalidates the entry. On save, only the newest mtime per path is written
-  and entries for deleted files are dropped. An ffprobe timeout is cached in
-  memory only (`_unpersisted`), so the next run probes the file again; other
-  failures are persisted.
+  persisted to `<CACHE_ROOT>/.podcastify-cache.json` (`MediaProcessor`,
+  media.py; ADR 0003). A new mtime invalidates the entry. On save, only the
+  newest mtime per path is written, entries for files that no longer exist are
+  dropped, and the write goes through a `.tmp` file and `replace`. On first
+  load, a cache found at `<PUBLIC_ROOT>/.podcastify-cache.json` is copied to
+  `CACHE_ROOT` and removed when no new cache exists yet. An ffprobe timeout is
+  cached in memory only (`_unpersisted`), so the next run probes the file
+  again; other failures are persisted.
 - **Duration fallback chain**: episode `duration_hms` (from YAML) →
   `MediaProcessor.get_duration_seconds` via `ffprobe` → omitted entirely if
   ffprobe fails (rss.py).
@@ -60,11 +66,13 @@ not covered there. Read both before proposing changes to `podcastify/`.
   logged and dropped). `EpisodeManager.discover_episodes` sets
   `Episode.published` (`pub_date`, else file mtime in UTC). Sorting (cli.py)
   and `<pubDate>` (rss.py) both read `Episode.published`; newest first.
-- **Pipeline**: `PodcastProcessor.process_podcast` (cli.py) — load YAML →
-  pydantic validate → extract metadata → require `public/<name>/` to exist →
-  discover episodes → warm duration cache in parallel → sort → generate XML →
-  atomic write (or skip write if `PUBLISH_XML=false` or `--dry-run`, or if
-  the XML matches the file on disk once `<lastBuildDate>` is ignored).
+- **Pipeline**: `PodcastProcessor.process_podcast` (cli.py) — check that
+  `PUBLIC_BASE_URL` starts with `http://` or `https://` → load YAML → pydantic
+  validate → require `public/<name>/` to exist → discover episodes → skip
+  episodes whose file is missing (warning) → warm duration cache in parallel →
+  sort → generate XML → atomic write (or skip write if `PUBLISH_XML=false` or
+  `--dry-run`, or if the XML matches the file on disk once `<lastBuildDate>`
+  is ignored). No episode left means the podcast fails.
 - **Watcher**: `FeedWatcher` (cli.py) polls a fingerprint (path, size,
   mtime_ns) of `*-podcast.yaml` configs and `public/<name>/` media every
   `--interval` seconds and runs `process_all_podcasts()` on a change. The

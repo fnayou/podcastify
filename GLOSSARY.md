@@ -1,7 +1,7 @@
 # Glossary
 
 - **Podcast / channel**: one feed, defined by `podcasts/<name>-podcast.yaml`, served as `public/<name>.xml`.
-- **Episode**: one MP3 + metadata, either listed explicitly under `episodes:` or auto-discovered from `public/<name>/*.mp3`.
+- **Episode**: one media file (`.mp3`, `.m4a`, `.mp4`, `.ogg` or `.opus`) + metadata, either listed explicitly under `episodes:` or auto-discovered from `public/<name>/`.
 - **Feed**: generated iTunes-compatible RSS 2.0 XML for a podcast.
 - **GUID**: episode unique ID. Defaults to SHA-1(`<podcast_name>/<filename>`), `isPermaLink="false"`.
 - **`duration_hms`**: episode duration as `H:MM:SS` or `M:SS`, either set in YAML or computed via `ffprobe`.
