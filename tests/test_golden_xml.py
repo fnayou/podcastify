@@ -1,120 +1,131 @@
-#!/usr/bin/env python3
-"""Golden-XML snapshot tests for feed generation.
-
-These tests ensure the generated XML output matches a known baseline,
-providing a regression guard against unintended changes to feed output.
-"""
-
 from pathlib import Path
+from xml.etree import ElementTree
+
+import pytest
 
 from podcastify.cli import PodcastProcessor
-from podcastify.config import Config
-from podcastify.parser import ConfigurationManager, validate_podcast_config
 
+GOLDEN_DIR = Path(__file__).parent / "golden"
 
-class TestGoldenXMLSnapshot:
-    """Verify feed output against golden baseline."""
-
-    def test_generate_feed_with_sample_config(self, tmp_path, monkeypatch):
-        """Generate a feed from a sample config and verify output structure."""
-        podcasts_dir = tmp_path / "podcasts"
-        public_dir = tmp_path / "public"
-        podcasts_dir.mkdir()
-        public_dir.mkdir()
-
-        monkeypatch.setattr("podcastify.config.Config.PODCASTS_ROOT", podcasts_dir)
-        monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", public_dir)
-        monkeypatch.setattr("podcastify.config.Config.BASE_URL", "http://localhost:8080")
-        monkeypatch.setenv("PODCASTS_ROOT", str(podcasts_dir))
-        monkeypatch.setenv("PUBLIC_ROOT", str(public_dir))
-        monkeypatch.setenv("PUBLIC_BASE_URL", "http://localhost:8080")
-
-        podcast_dir = public_dir / "testpod"
-        podcast_dir.mkdir()
-
-        mp3_file = podcast_dir / "episode1.mp3"
-        mp3_file.write_bytes(b"\x00" * 2048)
-
-        config_file = podcasts_dir / "testpod-podcast.yaml"
-        config_file.write_text(
-            """
-name: testpod
-title: Test Podcast
+BASIC_CONFIG = """
+name: basic
+title: Basic Show
 author-name: Test Author
 author-email: test@example.com
-description: A test podcast
+description: A basic show
 language: en
 explicit: false
-image: cover.jpg
+subtitle: Short line
+type: episodic
 categories:
   - Technology
 episodes:
   - file: episode1.mp3
     title: Episode 1
     description: First episode
+    pub_date: 2029-05-06T07:08:09+00:00
+    duration_hms: "00:10:00"
+    guid: basic-guid-1
+    season: 1
+    episode: 1
+    episode_type: full
+  - file: episode2.mp3
+    title: Episode 2
+    pub_date: 2029-06-07
 """
-        )
 
-        processor = PodcastProcessor()
-        success = processor.process_podcast("testpod", config_file)
-
-        assert success is True
-        xml_file = public_dir / "testpod.xml"
-        assert xml_file.exists()
-
-        xml_content = xml_file.read_text(encoding="utf-8")
-        assert '<?xml version="1.0" encoding="UTF-8"?>' in xml_content
-        assert '<rss version="2.0"' in xml_content
-        assert '<title>Test Podcast</title>' in xml_content
-        assert '<description><![CDATA[A test podcast]]></description>' in xml_content
-        assert '<itunes:author>Test Author</itunes:author>' in xml_content
-        assert '<itunes:email>test@example.com</itunes:email>' in xml_content
-        assert '<language>en</language>' in xml_content
-        assert '<item>' in xml_content
-        assert '<title>Episode 1</title>' in xml_content
-
-    def test_metadata_rendering_consistency(self, tmp_path, monkeypatch):
-        """Verify metadata is rendered consistently from validated model."""
-        podcasts_dir = tmp_path / "podcasts"
-        public_dir = tmp_path / "public"
-        podcasts_dir.mkdir()
-        public_dir.mkdir()
-
-        monkeypatch.setattr("podcastify.config.Config.PODCASTS_ROOT", podcasts_dir)
-        monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", public_dir)
-        monkeypatch.setattr("podcastify.config.Config.BASE_URL", "http://localhost:8080")
-
-        podcast_dir = public_dir / "meta-test"
-        podcast_dir.mkdir()
-
-        mp3_file = podcast_dir / "test.mp3"
-        mp3_file.write_bytes(b"\x00" * 2048)
-
-        config_file = podcasts_dir / "meta-test-podcast.yaml"
-        config_file.write_text(
-            """
-title: Metadata Test Show
-description: Testing metadata extraction
-author-name: Meta Author
-explicit: true
-subtitle: Test Subtitle
-summary: Test Summary
-type: episodic
+HOSTILE_CONFIG = """
+name: hostile
+title: "Fish & Chips <live> \\"quoted\\" \\x01"
+author-name: "Zoë & Søren"
+author-email: "zoe+test@example.com"
+description: "Close CDATA with ]]> early & often, é 日本語 🎙"
+summary: "Sum ]]> mary & <b>bold</b>"
+subtitle: "Sub & title"
+categories:
+  - [Arts, Food & Drink]
+  - name: Society & Culture
+    sub: Philosophy
+  - Business
 episodes:
-  - file: test.mp3
-    title: Test Episode
+  - file: "Épisode 1 & café #1.mp3"
+    title: "Ep <1> & \\"café\\""
+    description: "Desc ]]> with & ampersand and 日本語"
+    pub_date: 2029-05-06T07:08:09+02:00
+    duration_hms: "00:01:05"
+    author-name: "Ep & Author"
+  - file: "plain episode.mp3"
+    title: Plain
+    pub_date: 2029-06-07T00:00:00
 """
+
+
+def _media(public: Path, podcast: str, names: list) -> None:
+    pod_dir = public / podcast
+    pod_dir.mkdir()
+    for index, name in enumerate(names, start=1):
+        (pod_dir / name).write_bytes(b"\x00" * (1000 * index))
+
+
+def _generate(golden_roots, podcast: str, config: str, media: list) -> str:
+    podcasts, public = golden_roots
+    _media(public, podcast, media)
+    config_file = podcasts / f"{podcast}-podcast.yaml"
+    config_file.write_text(config, encoding="utf-8")
+    assert PodcastProcessor().process_podcast(podcast, config_file) is True
+    return (public / f"{podcast}.xml").read_text(encoding="utf-8")
+
+
+CASES = [
+    pytest.param("basic", BASIC_CONFIG, ["episode1.mp3", "episode2.mp3"], id="basic"),
+    pytest.param(
+        "hostile",
+        HOSTILE_CONFIG,
+        ["Épisode 1 & café #1.mp3", "plain episode.mp3"],
+        id="hostile",
+    ),
+]
+
+
+@pytest.mark.usefixtures("frozen_clock")
+class TestGoldenXML:
+    @pytest.mark.parametrize("podcast, config, media", CASES)
+    def test_output_matches_snapshot(self, golden_roots, podcast, config, media):
+        xml = _generate(golden_roots, podcast, config, media)
+        expected = (GOLDEN_DIR / f"{podcast}.xml").read_text(encoding="utf-8")
+        assert xml == expected
+
+    @pytest.mark.parametrize("podcast, config, media", CASES)
+    def test_output_is_well_formed(self, golden_roots, podcast, config, media):
+        xml = _generate(golden_roots, podcast, config, media)
+        root = ElementTree.fromstring(xml.encode("utf-8"))
+        assert root.tag == "rss"
+        assert len(root.findall("./channel/item")) == 2
+
+    def test_hostile_text_round_trips(self, golden_roots):
+        xml = _generate(golden_roots, "hostile", HOSTILE_CONFIG, CASES[1].values[2])
+        channel = ElementTree.fromstring(xml.encode("utf-8")).find("channel")
+        assert channel.findtext("title") == 'Fish & Chips <live> "quoted" '
+        assert channel.findtext("description") == "Close CDATA with ]]> early & often, é 日本語 🎙"
+        item = channel.findall("item")[1]
+        assert item.findtext("description") == "Desc ]]> with & ampersand and 日本語"
+        assert item.find("enclosure").get("url") == (
+            "http://localhost:8080/hostile/%C3%89pisode%201%20%26%20caf%C3%A9%20%231.mp3"
         )
 
-        processor = PodcastProcessor()
-        success = processor.process_podcast("meta-test", config_file)
+    def test_hostile_nested_categories(self, golden_roots):
+        xml = _generate(golden_roots, "hostile", HOSTILE_CONFIG, CASES[1].values[2])
+        root = ElementTree.fromstring(xml.encode("utf-8"))
+        ns = {"itunes": "http://www.itunes.com/dtds/podcast-1.0.dtd"}
+        tops = root.findall("./channel/itunes:category", ns)
+        assert [c.get("text") for c in tops] == ["Arts", "Society & Culture", "Business"]
+        assert [c.get("text") for c in tops[0].findall("itunes:category", ns)] == ["Food & Drink"]
+        assert [c.get("text") for c in tops[1].findall("itunes:category", ns)] == ["Philosophy"]
 
-        assert success is True
-        xml_file = public_dir / "meta-test.xml"
-        xml_content = xml_file.read_text(encoding="utf-8")
-
-        assert "<title>Metadata Test Show</title>" in xml_content
-        assert "<itunes:explicit>yes</itunes:explicit>" in xml_content
-        assert "<itunes:subtitle>Test Subtitle</itunes:subtitle>" in xml_content
-        assert "<itunes:summary><![CDATA[Test Summary]]></itunes:summary>" in xml_content
-        assert "<itunes:type>episodic</itunes:type>" in xml_content
+    def test_clock_and_durations_are_deterministic(self, golden_roots):
+        xml = _generate(golden_roots, "basic", BASIC_CONFIG, CASES[0].values[2])
+        root = ElementTree.fromstring(xml.encode("utf-8"))
+        ns = {"itunes": "http://www.itunes.com/dtds/podcast-1.0.dtd"}
+        assert root.findtext("./channel/lastBuildDate") == "Wed, 02 Jan 2030 03:04:05 +0000"
+        durations = [d.text for d in root.findall("./channel/item/itunes:duration", ns)]
+        assert durations == ["0:42", "00:10:00"]
