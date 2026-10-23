@@ -20,6 +20,7 @@ Create private podcast feeds from your own MP3s with minimal setup. Drop MP3s in
 - [Architecture](docs/architecture.md) — How it works internally
 - [Troubleshooting](docs/troubleshooting.md) — Common issues and fixes
 - [Contributing](docs/contributing.md) — Dev setup, style, PRs
+- [Releases](https://github.com/fnayou/podcastify/releases) — Release notes for new versions (`CHANGELOG.md` is frozen history up to v1.1.1)
 
 ---
 
