@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Superseded. The entrypoint now drops privileges via `PUID`/`PGID` with `su-exec` and supports a pinned non-root `user:`; see `docs/runtime.md`.
 
 ## Context
 
