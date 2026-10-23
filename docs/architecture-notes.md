@@ -5,15 +5,15 @@ not covered there. Read both before proposing changes to `podcastify/`.
 
 ## Module map
 
-| Module | Class / fn | Location |
-|---|---|---|
-| `podcastify/config.py` | `_EnvVar`, `Config` | config.py, config.py |
-| `podcastify/parser.py` | `EpisodeModel`, `PodcastChannelModel`, `PodcastFileModel` (pydantic) | parser.py, parser.py, parser.py |
-| `podcastify/parser.py` | `ConfigurationManager` | parser.py |
-| `podcastify/parser.py` | `EpisodeManager` | parser.py |
-| `podcastify/media.py` | `MediaProcessor` | media.py |
-| `podcastify/rss.py` | `RSSGenerator` | rss.py |
-| `podcastify/cli.py` | `PodcastProcessor`, `main` | cli.py, cli.py |
+| Module | Class / fn |
+|---|---|
+| `podcastify/config.py` | `_EnvVar`, `Config`, `_coerce_bool` |
+| `podcastify/parser.py` | `EpisodeModel`, `PodcastChannelModel`, `PodcastFileModel` (pydantic) |
+| `podcastify/parser.py` | `ConfigurationManager`, `EpisodeManager` |
+| `podcastify/logging_config.py` | `configure_logging` |
+| `podcastify/media.py` | `MediaProcessor` |
+| `podcastify/rss.py` | `RSSGenerator` |
+| `podcastify/cli.py` | `PodcastProcessor`, `build_parser`, `main` |
 
 ## Invariants & gotchas
 
@@ -24,14 +24,12 @@ not covered there. Read both before proposing changes to `podcastify/`.
   keys at top level) or nested (`podcast:` block) via `accept_flat_or_nested`
   (parser.py). Both forms must keep validating.
 - **Legacy `author` field**: `author` maps to `author-name` when `author-name`
-  is absent, in two places — `map_legacy_author` (parser.py) and
-  `extract_podcast_metadata` (parser.py). Keep both in sync.
-- **Dual metadata path**: `extract_podcast_metadata` (parser.py) renders
-  from a raw-dict whitelist, while pydantic model defaults (e.g. `language="en"`
-  in `PodcastChannelModel:64`) are discarded. `RSSGenerator` re-defaults the
-  same fields (rss.py) independently. Two sources of truth for the same
-  data; both must stay in sync. Stabilization task: render from the validated
-  model instead of the raw dict.
+  is absent, in `PodcastChannelModel.map_legacy_author` (parser.py).
+- **Metadata path**: `PodcastProcessor._build_metadata_from_model` (cli.py)
+  builds channel metadata from the validated model, limited to
+  `Config.CHANNEL_FIELDS`. `RSSGenerator` still re-defaults some values (for
+  example `language` to `en`), so a default changed in `PodcastChannelModel`
+  must be changed there too.
 - **Episode source priority**: an explicit `episodes:` list (validated via
   pydantic) wins over auto-scanning `public/<name>/` for `Config.MEDIA_TYPES`
   extensions, case-insensitive — `discover_episodes` (parser.py). The same map
