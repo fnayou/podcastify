@@ -26,6 +26,10 @@
 
 ## Workflow
 
+### Parallel work
+
+Several tickets in parallel use worktree lanes: `task worktree:install` once, then see [worktree lanes](worktree-lanes.md).
+
 ### Build and test locally
 
 ```bash

@@ -1,0 +1,14 @@
+version: "3"
+
+tasks:
+  install:
+    desc: Install or re-assert worktree lanes (herdr, worktrunk, fzf, jq, pinned plugin, hook approvals)
+    silent: true
+    cmds:
+      - bash ./tools/worktree-lanes.sh install
+
+  verify:
+    desc: Verify worktree lanes (tools, measured worktrunk version, plugin commit, merge refusals)
+    silent: true
+    cmds:
+      - bash ./tools/worktree-lanes.sh verify

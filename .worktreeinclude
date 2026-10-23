@@ -1,0 +1,7 @@
+# Gitignored files a new git worktree copies from the primary checkout.
+# Read by worktrunk's `wt step copy-ignored --require-include` (the pre-start
+# hook in .config/wt.toml). A file must be BOTH gitignored and listed here to be
+# copied. Guide: docs/worktree-lanes.md
+#
+# Per-lane settings, notably HOST_PORT (see the lane contract in AGENTS.md).
+.env
