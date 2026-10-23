@@ -119,7 +119,8 @@ class TestPubDate:
 
     def test_invalid_value_is_logged(self, caplog):
         _pub_date("not a date")
-        assert any("pub_date" in r.message for r in caplog.records)
+        warnings = [r.message for r in caplog.records if r.levelname == "WARNING"]
+        assert warnings == ["Invalid pub_date 'not a date'; using file modification time"]
 
 
 class TestValidatePodcastConfig:

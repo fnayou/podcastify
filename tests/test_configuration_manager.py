@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Tests for ConfigurationManager class."""
 
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -29,7 +30,9 @@ class TestLoadYaml:
         f.write_text("{[", encoding="utf-8")
         result = ConfigurationManager.load_yaml(f)
         assert result == {}
-        assert any(record.levelname == "ERROR" for record in caplog.records)
+        errors = [r for r in caplog.records if r.levelname == "ERROR"]
+        assert len(errors) == 1
+        assert errors[0].message.startswith(f"Failed to load config {f}:")
 
     def test_load_missing_file(self, caplog):
         import logging
@@ -37,7 +40,20 @@ class TestLoadYaml:
         caplog.set_level(logging.DEBUG)
         result = ConfigurationManager.load_yaml(Path("/nonexistent/file.yaml"))
         assert result == {}
-        assert any(record.levelname == "ERROR" for record in caplog.records)
+        errors = [r for r in caplog.records if r.levelname == "ERROR"]
+        assert len(errors) == 1
+        assert errors[0].message.startswith("Failed to load config /nonexistent/file.yaml:")
+
+    @pytest.mark.parametrize("content", ["- a\n- b\n", "just a string\n", "42\n"])
+    def test_non_mapping_top_level_is_returned_unchanged(self, tmp_path, content):
+        f = tmp_path / "odd.yaml"
+        f.write_text(content, encoding="utf-8")
+        assert ConfigurationManager.load_yaml(f) not in ({}, None)
+
+    def test_unquoted_date_loads_as_date_object(self, tmp_path):
+        f = tmp_path / "dated.yaml"
+        f.write_text("pub_date: 2024-01-15\n", encoding="utf-8")
+        assert ConfigurationManager.load_yaml(f)["pub_date"] == date(2024, 1, 15)
 
 
 class TestDiscoverPodcastConfigs:
@@ -62,7 +78,8 @@ class TestDiscoverPodcastConfigs:
         monkeypatch.setattr("podcastify.config.Config.PODCASTS_ROOT", missing)
         result = ConfigurationManager.discover_podcast_configs()
         assert result == []
-        assert any(record.levelname == "WARNING" for record in caplog.records)
+        warnings = [r.message for r in caplog.records if r.levelname == "WARNING"]
+        assert warnings == [f"Podcasts directory not found: {missing}"]
 
     def test_skips_directories(self, tmp_path, monkeypatch):
         monkeypatch.setattr("podcastify.config.Config.PODCASTS_ROOT", tmp_path)
