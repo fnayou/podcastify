@@ -12,8 +12,10 @@
 ```bash
 git clone https://github.com/fnayou/podcastify
 cd podcastify
-# create .env from the section above (set HOST_PORT if you want a custom port)
+cp .env.example .env   # set HOST_PORT if you want a custom port
 ```
+
+Variables and defaults: [Environment Variables](deployment.md#environment-variables).
 
 ### 2. Start the stack
 

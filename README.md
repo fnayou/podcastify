@@ -32,7 +32,7 @@ Create private podcast feeds from your own MP3s with minimal setup. Drop MP3s in
 - Clean XML: stable GUIDs (SHA-1), configurable language, empty tags rather than empty CDATA.
 - Single container image: Caddy (static hosting) + Python generator.
 - Developer-friendly Taskfile (contributors only) with namespaced commands like `task docker:up`, `task podcastify:generate`.
-- Configurable ports: choose any host port (e.g., `1234`) via `.env` / Compose. Caddy listens on `${PORT}` inside the container.
+- Configurable ports: choose any host port (e.g., `1234`) via `.env` / Compose. Caddy listens on `${SERVICE_PORT}` inside the container.
 
 ---
 
@@ -47,9 +47,16 @@ Image: `fnayou/podcastify` (public)
 export HOST_PORT=1234
 export PUBLIC_BASE_URL="http://localhost:${HOST_PORT}"
 
-docker run --rm   -e PORT=8080   -e PUBLIC_BASE_URL="${PUBLIC_BASE_URL}"   -p ${HOST_PORT}:8080   -v "$(pwd)/public:/app/public"   -v "$(pwd)/podcasts:/app/podcasts"   fnayou/podcastify:latest
+docker run --rm \
+  -e SERVICE_PORT=8080 \
+  -e PUBLIC_BASE_URL="${PUBLIC_BASE_URL}" \
+  -p ${HOST_PORT}:8080 \
+  -v "$(pwd)/public:/app/public" \
+  -v "$(pwd)/podcasts:/app/podcasts" \
+  -v "$(pwd)/cache:/app/.cache" \
+  fnayou/podcastify:latest
 # or pin a version:
-# fnayou/podcastify:v1.0.0
+# fnayou/podcastify:v1.1.1
 ```
 
 ### docker-compose.yml
@@ -57,25 +64,30 @@ docker run --rm   -e PORT=8080   -e PUBLIC_BASE_URL="${PUBLIC_BASE_URL}"   -p ${
 ```yaml
 services:
   podcastify:
-    image: fnayou/podcastify:latest   # or fnayou/podcastify:v1.0.0
+    image: fnayou/podcastify:latest
     ports:
-      - "${HOST_PORT:-8080}:${PORT:-8080}"
+      - "${HOST_PORT:-8080}:${SERVICE_PORT:-8080}"
     environment:
-      - PORT=${PORT:-8080}
+      - SERVICE_PORT=${SERVICE_PORT:-8080}
       - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://localhost:${HOST_PORT:-8080}}
       - PODCASTS_ROOT=/app/podcasts
       - PUBLIC_ROOT=/app/public
+      - CACHE_ROOT=/app/.cache
       - RUN_ON_START=${RUN_ON_START:-true}
       - PUBLISH_XML=${PUBLISH_XML:-true}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
     volumes:
       - ./public:/app/public
       - ./podcasts:/app/podcasts
+      - ./cache:/app/.cache
     restart: unless-stopped
 ```
 
-Create a `.env` file (next section) to set `HOST_PORT` and `PUBLIC_BASE_URL`.
+Create a `.env` file to set `HOST_PORT` and `PUBLIC_BASE_URL`; see [Environment Variables](docs/deployment.md#environment-variables).
 
-For production behind a reverse proxy at `https://podcasts.domain.tld`, set `PUBLIC_BASE_URL=https://podcasts.domain.tld` and forward to the container’s `${PORT}` (default 8080).
+For production behind a reverse proxy at `https://podcasts.domain.tld`, set `PUBLIC_BASE_URL=https://podcasts.domain.tld` and forward to the container’s `${SERVICE_PORT}` (default 8080).
 
 ---
 
@@ -83,13 +95,16 @@ For production behind a reverse proxy at `https://podcasts.domain.tld`, set `PUB
 
 ```
 .
-├─ app.py                # generator (root of the project; already in the image)
-├─ docker-compose.yml
-├─ docker/               # Dockerfile & Caddy config (only needed for local builds)
-│  └─ podcastify/
-│     ├─ Dockerfile
-│     ├─ Caddyfile       # uses :{$PORT} and hides .gitkeep (see below)
-│     └─ entrypoint.sh
+├─ app.py                # CLI entry point
+├─ podcastify/           # config, parser, media, rss, cli, logging_config
+├─ tasks/                # Taskfile includes (dev, docker, podcastify, worktree)
+├─ templates/            # podcast config scaffold for task podcastify:new
+├─ tests/                # pytest suite
+├─ docs/                 # human docs; docs/adr/ holds decisions
+├─ docker/podcastify/    # Dockerfile, Caddy config and entrypoint (local builds)
+│  ├─ Dockerfile
+│  ├─ Caddyfile          # serves /app/public on ${SERVICE_PORT}
+│  └─ entrypoint.sh
 ├─ podcasts/             # <name>-podcast.yaml lives here
 │  └─ example-podcast.yaml
 ├─ public/               # served statically by Caddy
@@ -97,9 +112,9 @@ For production behind a reverse proxy at `https://podcasts.domain.tld`, set `PUB
 │     ├─ cover.jpg
 │     ├─ ep01.mp3
 │     └─ episode.png
+├─ docker-compose.yml
 ├─ Taskfile.yml
 ├─ .env                  # optional env vars
-├─ .gitignore
 └─ README.md
 ```
 
@@ -120,84 +135,21 @@ For production behind a reverse proxy at `https://podcasts.domain.tld`, set `PUB
 
 ## Environment variables (.env)
 
-```env
-# Host port → visit http://localhost:${HOST_PORT}
-HOST_PORT=8080
-
-# Container listen port (Caddy listens on this; keep 8080 unless you know why)
-PORT=8080
-
-# Base URL used in generated <enclosure> and image links
-# Must reflect the public URL and host port you expose (or your domain)
-PUBLIC_BASE_URL=http://localhost:${HOST_PORT}
-
-# (Advanced) override in-container paths if needed
-PODCASTS_ROOT=/app/podcasts
-PUBLIC_ROOT=/app/public
-
-# Run generator on container start (default true)
-RUN_ON_START=true
-
-# Write XML to disk (default true)
-PUBLISH_XML=true
-```
+Variables, defaults and a sample `.env` are documented in [Environment Variables](docs/deployment.md#environment-variables).
 
 By default, Caddy serves `./public`. Change the published host port via `HOST_PORT` in `.env` or directly in `docker-compose.yml`.
 
 ---
 
-## Caddyfile example
+## Caddyfile
 
-The image ships with a Caddyfile that uses an environment variable for the port and hides `.gitkeep` from listings:
-
-```caddy
-:{$PORT} {
-  root * /app/public
-  encode gzip
-  header Access-Control-Allow-Origin "*"
-
-  file_server {
-    browse
-    hide .gitkeep
-    # hide .git* .DS_Store  # optionally hide more dotfiles
-  }
-
-  log {
-    output stdout
-    format console
-  }
-}
-```
+The image ships a Caddyfile that listens on `${SERVICE_PORT}` and serves `/app/public`; see [Caddyfile](docs/deployment.md#caddyfile).
 
 ---
 
 ## Security hardening
 
-The image runs fine as-is. For additional defense-in-depth, you can apply these Compose settings with **v1.0.0 and later** without changing the image:
-
-```yaml
-services:
-  podcastify:
-    # ... your existing config ...
-    read_only: true
-    tmpfs:
-      - /tmp
-    security_opt:
-      - no-new-privileges:true
-    cap_drop: ["ALL"]
-```
-
-These settings make the root filesystem read-only (your mounted `public/` and `podcasts/` remain writable), prevent privilege escalation, and drop Linux capabilities (the app listens on high port `${PORT}` so none are needed).
-
-If you later publish an image that runs as a non-root user by default (for example `v1.0.1+`), you can also add:
-
-```yaml
-services:
-  podcastify:
-    user: "10001:10001"
-```
-
-and keep the same hardening flags above.
+For defense-in-depth Compose settings, see [Security Hardening](docs/deployment.md#security-hardening). Hardened mode pins the container user with `user: "1000:1000"`; the default root start needs the `CHOWN`, `SETUID` and `SETGID` capabilities, so do not combine it with a drop-all capability setting.
 
 ---
 
@@ -209,7 +161,7 @@ Task is for **contributors and local development** only. End users can run the p
    ```bash
    git clone https://github.com/fnayou/podcastify
    cd podcastify
-   # create .env from the section above (set HOST_PORT if you want a custom port)
+   cp .env.example .env   # set HOST_PORT if you want a custom port
    ```
 
 2. Start the stack
