@@ -70,6 +70,8 @@ categories:
 
 If you omit the `episodes:` list, Podcastify auto-discovers all `*.mp3` files in `public/<name>/`, sorted by modification time (newest first).
 
+Set `pub_date` on every episode for a stable feed. The modification time changes when files are copied, restored from a backup or moved to another host, which reorders episodes and gives them new `pubDate` values, so some podcast apps show them as new.
+
 ### Explicit Episode List
 
 ```yaml
@@ -95,7 +97,7 @@ episodes:
 | `description` | string | No | Episode description. |
 | `summary` | string | No | Longer summary. Falls back to `description`. |
 | `subtitle` | string | No | Brief subtitle. |
-| `pub_date` | string | No | ISO 8601 datetime. Defaults to file modification time. |
+| `pub_date` | date or datetime | No | ISO 8601 date or datetime, quoted or not. A value without a timezone is read as UTC. An invalid value is logged and ignored. Defaults to file modification time. |
 | `image` | string | No | Episode image filename or URL. |
 | `explicit` | boolean | No | Overrides channel `explicit` if set. |
 | `author-name` | string | No | Overrides channel author for this episode. |

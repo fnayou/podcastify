@@ -47,8 +47,11 @@ not covered there. Read both before proposing changes to `podcastify/`.
 - **Atomic XML write**: feed is written to a tempfile in `PUBLIC_ROOT` then
   `os.replace`'d onto `<name>.xml` (cli.py) — readers never see
   partial XML.
-- **Sort order**: episodes sorted by `pub_date` (ISO, `Z` → `+00:00`) else
-  file mtime, newest first (cli.py).
+- **Published datetime**: `EpisodeModel.pub_date` is parsed once in the model
+  (date, datetime or ISO string; naive values are UTC; invalid values are
+  logged and dropped). `EpisodeManager.discover_episodes` stores
+  `__published` (`pub_date`, else file mtime in UTC). Sorting (cli.py) and
+  `<pubDate>` (rss.py) both read `__published`; newest first.
 - **Pipeline**: `PodcastProcessor.process_podcast` (cli.py) — load YAML →
   pydantic validate → extract metadata → require `public/<name>/` to exist →
   discover episodes → warm duration cache in parallel → sort → generate XML →
