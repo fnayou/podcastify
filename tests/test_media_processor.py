@@ -225,6 +225,7 @@ class TestGetDurationSeconds:
 
     def test_ffprobe_missing_warns_once_in_parallel(self, mocker, tmp_path, monkeypatch, caplog):
         import logging
+
         caplog.set_level(logging.DEBUG)
         cache_root = tmp_path / "cache"
         cache_root.mkdir()
@@ -258,6 +259,7 @@ class TestGetDurationSeconds:
     def test_called_process_error_logs_stderr(self, mocker, mock_mp3, tmp_path, monkeypatch, caplog):
         """CalledProcessError should log the stderr message."""
         import logging
+
         caplog.set_level(logging.DEBUG)
         cache_root = tmp_path / "cache"
         cache_root.mkdir()
@@ -277,6 +279,7 @@ class TestGetDurationSeconds:
     def test_called_process_error_with_empty_stderr(self, mocker, mock_mp3, tmp_path, monkeypatch, caplog):
         """CalledProcessError with empty stderr should log placeholder."""
         import logging
+
         caplog.set_level(logging.DEBUG)
         cache_root = tmp_path / "cache"
         cache_root.mkdir()
@@ -309,6 +312,7 @@ class TestGetDurationSeconds:
     def test_stream_fallback_failure_returns_none(self, mocker, mock_mp3, tmp_path, monkeypatch, caplog):
         """When both format and stream durations fail, return None."""
         import logging
+
         caplog.set_level(logging.DEBUG)
         cache_root = tmp_path / "cache"
         cache_root.mkdir()
@@ -351,6 +355,7 @@ class TestGetDurationSeconds:
     def test_stream_fallback_value_error_returns_none(self, mocker, mock_mp3, tmp_path, monkeypatch, caplog):
         """Malformed stream-duration string (ValueError) is folded into the final WARN."""
         import logging
+
         caplog.set_level(logging.DEBUG)
         cache_root = tmp_path / "cache"
         cache_root.mkdir()

@@ -108,15 +108,11 @@ class PodcastChannelModel(BaseModel):
         for index, ep in enumerate(self.episodes or [], start=1):
             fname = Path(ep.file).name
             if fname in files:
-                raise ValueError(
-                    f"duplicate episode file '{fname}' (episodes {files[fname]} and {index})"
-                )
+                raise ValueError(f"duplicate episode file '{fname}' (episodes {files[fname]} and {index})")
             files[fname] = index
             if ep.guid:
                 if ep.guid in guids:
-                    raise ValueError(
-                        f"duplicate episode guid '{ep.guid}' (episodes {guids[ep.guid]} and {index})"
-                    )
+                    raise ValueError(f"duplicate episode guid '{ep.guid}' (episodes {guids[ep.guid]} and {index})")
                 guids[ep.guid] = index
         return self
 

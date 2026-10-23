@@ -102,7 +102,23 @@ class TestIsValidName:
 
     @pytest.mark.parametrize(
         "name",
-        ["", "..", "../../etc", "foo/bar", "foo\\bar", "my..show", "my show", "a#b", "a?b", "a%b", "café", "-a", ".a", "_a", "a\n"],
+        [
+            "",
+            "..",
+            "../../etc",
+            "foo/bar",
+            "foo\\bar",
+            "my..show",
+            "my show",
+            "a#b",
+            "a?b",
+            "a%b",
+            "café",
+            "-a",
+            ".a",
+            "_a",
+            "a\n",
+        ],
     )
     def test_invalid(self, name):
         assert _is_valid_name(name) is False

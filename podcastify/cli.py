@@ -100,9 +100,7 @@ class PodcastProcessor:
                 if Path(e.get("__resolved_path", "")).exists():
                     episodes.append(e)
                 else:
-                    logger.warning(
-                        f"Skipping episode for {podcast_name}: file not found: {e.get('file', 'unknown')}"
-                    )
+                    logger.warning(f"Skipping episode for {podcast_name}: file not found: {e.get('file', 'unknown')}")
             skipped = len(discovered) - len(episodes)
             if not episodes:
                 logger.warning(f"No episodes found for {podcast_name} in {pub_dir}")
@@ -143,10 +141,7 @@ class PodcastProcessor:
                 skipped_note = f" ({skipped} skipped)" if skipped else ""
                 logger.info(f"Published {podcast_name}: {len(episodes)} episodes{skipped_note} -> {out}")
             else:
-                logger.info(
-                    f"Validated {podcast_name}: {len(episodes)} episodes "
-                    "(XML publishing disabled)"
-                )
+                logger.info(f"Validated {podcast_name}: {len(episodes)} episodes (XML publishing disabled)")
 
             return True
 

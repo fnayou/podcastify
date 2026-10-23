@@ -47,7 +47,7 @@ class RSSGenerator:
                 cats_xml.append(
                     f'    <itunes:category text="{esc_attr(parent)}">\n'
                     f'      <itunes:category text="{esc_attr(subcategory)}"/>\n'
-                    f'    </itunes:category>'
+                    f"    </itunes:category>"
                 )
             else:
                 cats_xml.append(f'    <itunes:category text="{esc_attr(parent)}"/>')
@@ -77,9 +77,7 @@ class RSSGenerator:
 
         return "\n".join(cats_xml)
 
-    def generate_feed_xml(
-        self, podcast_name: str, metadata: Dict[str, Any], episodes: List[Dict[str, Any]]
-    ) -> str:
+    def generate_feed_xml(self, podcast_name: str, metadata: Dict[str, Any], episodes: List[Dict[str, Any]]) -> str:
         logger.debug(f"Render channel: {podcast_name}")
         now = rfc2822_date(datetime.now(timezone.utc))
         channel_xml = self._build_channel_metadata(podcast_name, metadata, now)
@@ -95,9 +93,7 @@ class RSSGenerator:
   </channel>
 </rss>"""
 
-    def _build_channel_metadata(
-        self, podcast_name: str, metadata: Dict[str, Any], timestamp: str
-    ) -> str:
+    def _build_channel_metadata(self, podcast_name: str, metadata: Dict[str, Any], timestamp: str) -> str:
         esc = self.xml_escape
         title = metadata.get("title") or podcast_name
         link = metadata.get("link") or Config.BASE_URL
@@ -164,9 +160,7 @@ class RSSGenerator:
 
         return "\n".join(parts)
 
-    def _build_episode_item(
-        self, podcast_name: str, episode: Dict[str, Any], channel_meta: Dict[str, Any]
-    ) -> str:
+    def _build_episode_item(self, podcast_name: str, episode: Dict[str, Any], channel_meta: Dict[str, Any]) -> str:
         esc = self.xml_escape
         file_path = episode.get("__resolved_path")
         if not isinstance(file_path, Path):
@@ -184,9 +178,7 @@ class RSSGenerator:
 
         pub_dt = episode["__published"]
 
-        guid_val = episode.get("guid") or hashlib.sha1(
-            f"{podcast_name}/{fname}".encode("utf-8")
-        ).hexdigest()
+        guid_val = episode.get("guid") or hashlib.sha1(f"{podcast_name}/{fname}".encode("utf-8")).hexdigest()
 
         title = episode.get("title") or file_path.stem
         desc = episode.get("description") or ""
@@ -194,11 +186,7 @@ class RSSGenerator:
         subtitle = episode.get("subtitle")
         author = episode.get("author-name") or channel_meta.get("author-name", "")
         explicit = episode.get("explicit")
-        explicit = (
-            _coerce_bool(channel_meta.get("explicit"))
-            if explicit is None
-            else _coerce_bool(explicit)
-        )
+        explicit = _coerce_bool(channel_meta.get("explicit")) if explicit is None else _coerce_bool(explicit)
 
         dur_hms = episode.get("duration_hms")
         if not dur_hms:

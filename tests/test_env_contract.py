@@ -31,9 +31,7 @@ def _deployment_variables():
 
 
 class TestPathVariablesAreInternal:
-    @pytest.mark.parametrize(
-        "relative", ["docker-compose.yml", ".env.example", "docs/deployment.md", "README.md"]
-    )
+    @pytest.mark.parametrize("relative", ["docker-compose.yml", ".env.example", "docs/deployment.md", "README.md"])
     def test_not_offered_as_settings(self, relative):
         text = _read(relative)
         for name in PATH_VARS:
@@ -62,9 +60,7 @@ class TestComposeCarriesNoDuplicatedDefaults:
         assert re.search(rf"^\s+- {name}$", _read("docker-compose.yml"), re.M)
 
     def test_public_base_url_keeps_its_host_port_default(self):
-        assert "PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://localhost:${HOST_PORT:-8080}}" in _read(
-            "docker-compose.yml"
-        )
+        assert "PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://localhost:${HOST_PORT:-8080}}" in _read("docker-compose.yml")
 
     def test_volumes_have_no_redundant_rw_suffix(self):
         assert ":rw" not in _read("docker-compose.yml")

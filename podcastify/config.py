@@ -20,8 +20,7 @@ def _coerce_bool(value: Any, default: bool = False) -> bool:
             return True
         if normalized not in _FALSE_VALUES:
             logger.warning(
-                f"Unrecognised boolean value '{value}'; treating as false "
-                "(use true/false, yes/no, 1/0 or on/off)"
+                f"Unrecognised boolean value '{value}'; treating as false (use true/false, yes/no, 1/0 or on/off)"
             )
         return False
     return bool(value)
@@ -50,9 +49,22 @@ class Config:
     LOG_LEVEL = _EnvVar("LOG_LEVEL", "INFO")
 
     CHANNEL_FIELDS = [
-        "name", "title", "author-name", "author-email", "subtitle",
-        "summary", "description", "language", "explicit", "image",
-        "link", "categories", "type", "block", "complete", "new_feed_url",
+        "name",
+        "title",
+        "author-name",
+        "author-email",
+        "subtitle",
+        "summary",
+        "description",
+        "language",
+        "explicit",
+        "image",
+        "link",
+        "categories",
+        "type",
+        "block",
+        "complete",
+        "new_feed_url",
     ]
 
     MEDIA_TYPES = {

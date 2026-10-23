@@ -23,6 +23,7 @@ class TestLoadYaml:
 
     def test_load_invalid_yaml(self, tmp_path, caplog):
         import logging
+
         caplog.set_level(logging.DEBUG)
         f = tmp_path / "bad.yaml"
         f.write_text("{[", encoding="utf-8")
@@ -32,6 +33,7 @@ class TestLoadYaml:
 
     def test_load_missing_file(self, caplog):
         import logging
+
         caplog.set_level(logging.DEBUG)
         result = ConfigurationManager.load_yaml(Path("/nonexistent/file.yaml"))
         assert result == {}
