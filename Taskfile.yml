@@ -19,6 +19,8 @@ includes:
     taskfile: ./tasks/dev.yml
   worktree:
     taskfile: ./tasks/worktree.yml
+  ci:
+    taskfile: ./tasks/ci.yml
   devlocal:
     taskfile: ./Taskfile.dev.yml
     optional: true
