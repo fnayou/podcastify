@@ -238,8 +238,8 @@ class TestProcessAllPodcasts:
     def test_empty(self, tmp_path, monkeypatch, caplog):
         monkeypatch.setattr("podcastify.config.Config.PODCASTS_ROOT", tmp_path)
         proc = PodcastProcessor()
-        count = proc.process_all_podcasts()
-        assert count == 0
+        failed = proc.process_all_podcasts()
+        assert failed == 0
         assert any(record.levelname == "INFO" for record in caplog.records)
 
     def test_multiple(self, tmp_path, monkeypatch):
@@ -279,8 +279,8 @@ class TestProcessAllPodcasts:
         pub2.mkdir()
         (pub2 / "ep.mp3").write_bytes(b"\x00" * 64)
         proc = PodcastProcessor()
-        count = proc.process_all_podcasts()
-        assert count == 2
+        failed = proc.process_all_podcasts()
+        assert failed == 0
         assert (tmp_path / "one.xml").exists()
         assert (tmp_path / "two.xml").exists()
 
@@ -311,6 +311,6 @@ class TestProcessAllPodcasts:
             encoding="utf-8",
         )
         proc = PodcastProcessor()
-        count = proc.process_all_podcasts()
-        assert count == 1
+        failed = proc.process_all_podcasts()
+        assert failed == 1
         assert any("1/2 successful" in record.message for record in caplog.records)
