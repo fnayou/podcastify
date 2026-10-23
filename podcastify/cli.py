@@ -57,7 +57,7 @@ class PodcastProcessor:
             logger.debug(f"Config parsed: {config_path}")
             validated, err = validate_podcast_config(cfg)
             if err or validated is None:
-                logger.error(f"Config validation failed for {podcast_name}: {err}")
+                logger.error(f"Config validation failed for {podcast_name}: {err or 'missing podcast configuration'}")
                 return False
 
             cfg_name = validated.name
