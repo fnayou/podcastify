@@ -3,7 +3,7 @@
 [![Docker Pulls](https://img.shields.io/docker/pulls/fnayou/podcastify)](https://hub.docker.com/r/fnayou/podcastify)
 [![Image Size](https://img.shields.io/docker/image-size/fnayou/podcastify/latest)](https://hub.docker.com/r/fnayou/podcastify/tags)
 [![GitHub Stars](https://img.shields.io/github/stars/fnayou/podcastify)](https://github.com/fnayou/podcastify)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/fnayou/podcastify/blob/main/LICENSE)
 
 Create private podcast feeds from your own MP3s with minimal setup. Drop MP3s into a folder, add a simple YAML file, and Podcastify builds an iTunes-compatible RSS feed. Serve everything (XML + media) from one container (Caddy + Python) via Docker.
 
@@ -14,12 +14,12 @@ Create private podcast feeds from your own MP3s with minimal setup. Drop MP3s in
 
 ## Documentation
 
-- [Getting Started](docs/getting-started.md) — Install, run, first feed
-- [Configuration](docs/configuration.md) — Complete YAML reference
-- [Deployment](docs/deployment.md) — Docker, reverse proxy, hardening
-- [Architecture](docs/architecture.md) — How it works internally
-- [Troubleshooting](docs/troubleshooting.md) — Common issues and fixes
-- [Contributing](docs/contributing.md) — Dev setup, style, PRs
+- [Getting Started](https://github.com/fnayou/podcastify/blob/main/docs/getting-started.md) — Install, run, first feed
+- [Configuration](https://github.com/fnayou/podcastify/blob/main/docs/configuration.md) — Complete YAML reference
+- [Deployment](https://github.com/fnayou/podcastify/blob/main/docs/deployment.md) — Docker, reverse proxy, hardening
+- [Architecture](https://github.com/fnayou/podcastify/blob/main/docs/architecture.md) — How it works internally
+- [Troubleshooting](https://github.com/fnayou/podcastify/blob/main/docs/troubleshooting.md) — Common issues and fixes
+- [Contributing](https://github.com/fnayou/podcastify/blob/main/docs/contributing.md) — Dev setup, style, PRs
 - [Releases](https://github.com/fnayou/podcastify/releases) — Release notes for new versions (`CHANGELOG.md` is frozen history up to v1.1.1)
 
 ---
@@ -84,7 +84,7 @@ services:
     restart: unless-stopped
 ```
 
-Create a `.env` file to set `HOST_PORT` and `PUBLIC_BASE_URL`; see [Environment Variables](docs/deployment.md#environment-variables).
+Create a `.env` file to set `HOST_PORT` and `PUBLIC_BASE_URL`; see [Environment Variables](https://github.com/fnayou/podcastify/blob/main/docs/deployment.md#environment-variables).
 
 For production behind a reverse proxy at `https://podcasts.domain.tld`, set `PUBLIC_BASE_URL=https://podcasts.domain.tld` and forward to the container’s `${SERVICE_PORT}` (default 8080). Publish the port on the loopback interface only, so the plain-HTTP port is not reachable around the proxy:
 
@@ -139,7 +139,7 @@ For production behind a reverse proxy at `https://podcasts.domain.tld`, set `PUB
 
 ## Environment variables (.env)
 
-Variables, defaults and a sample `.env` are documented in [Environment Variables](docs/deployment.md#environment-variables).
+Variables, defaults and a sample `.env` are documented in [Environment Variables](https://github.com/fnayou/podcastify/blob/main/docs/deployment.md#environment-variables).
 
 By default, Caddy serves `./public`. Change the published host port via `HOST_PORT` in `.env` or directly in `docker-compose.yml`.
 
@@ -147,13 +147,13 @@ By default, Caddy serves `./public`. Change the published host port via `HOST_PO
 
 ## Caddyfile
 
-The image ships a Caddyfile that listens on `${SERVICE_PORT}` and serves `/app/public`; see [Caddyfile](docs/deployment.md#caddyfile).
+The image ships a Caddyfile that listens on `${SERVICE_PORT}` and serves `/app/public`; see [Caddyfile](https://github.com/fnayou/podcastify/blob/main/docs/deployment.md#caddyfile).
 
 ---
 
 ## Security hardening
 
-For defense-in-depth Compose settings, see [Security Hardening](docs/deployment.md#security-hardening). Hardened mode pins the container user with `user: "1000:1000"`; the default root start needs the `CHOWN`, `SETUID` and `SETGID` capabilities, so do not combine it with a drop-all capability setting.
+For defense-in-depth Compose settings, see [Security Hardening](https://github.com/fnayou/podcastify/blob/main/docs/deployment.md#security-hardening). Hardened mode pins the container user with `user: "1000:1000"`; the default root start needs the `CHOWN`, `SETUID` and `SETGID` capabilities, so do not combine it with a drop-all capability setting.
 
 ---
 
@@ -292,4 +292,4 @@ task doctor                   # tools, versions, directories, compose file
 
 ## License
 
-MIT — see [`LICENSE`](./LICENSE).
+MIT — see [`LICENSE`](https://github.com/fnayou/podcastify/blob/main/LICENSE).
