@@ -1,3 +1,7 @@
+{
+	admin off
+}
+
 :{$SERVICE_PORT} {
 	root * /app/public
 
@@ -6,6 +10,8 @@
 	log_skip @health
 	encode gzip
 	header Access-Control-Allow-Origin "*"
+	header X-Content-Type-Options "nosniff"
+	header -Server
 
 	@rss path *.xml
 	header @rss Content-Type "application/rss+xml; charset=utf-8"
