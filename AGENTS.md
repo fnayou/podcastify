@@ -1,113 +1,77 @@
-# Podcastify — AI Agent Instructions
+# Podcastify
 
-## Project Overview
-
-Podcastify is a tiny self-hosted podcast RSS generator. Drop MP3s into a folder, add a YAML config, and it builds iTunes-compatible RSS feeds. Served from a single Docker container (Caddy + Python).
+Tiny self-hosted podcast RSS generator. Drop MP3s into a folder, add a YAML config, get iTunes-compatible RSS feeds. One Docker container (Caddy + Python).
 
 - Repository: https://github.com/fnayou/podcastify
 - Docker Hub: https://hub.docker.com/r/fnayou/podcastify
 - License: MIT
 
-## Tech Stack
+## Stack
 
-- Python 3 (`podcastify/` package, thin `app.py` entry)
-- PyYAML — config parsing
-- Caddy — static file server (inside container)
-- supervisord — process manager (inside container)
-- Docker / Docker Compose — deployment
-- Taskfile (go-task) — developer commands
+Python 3.12 (`podcastify/` package, thin `app.py` entry), PyYAML, pydantic, Caddy (static server), tini (PID 1), Docker Compose, Taskfile (go-task).
 
-## Directory Layout
+## Layout
 
 ```
 app.py                  # CLI entry point
-podcastify/             # Generator package (config, parser, media, rss, cli)
-docker/podcastify/      # Dockerfile, Caddyfile, entrypoint, supervisord
+podcastify/             # config, parser, media, rss, cli, logging_config
+docker/podcastify/      # Dockerfile, Caddyfile, entrypoint.sh
 podcasts/               # YAML configs: <name>-podcast.yaml
-public/                 # Media + generated XML: <name>/ (media), <name>.xml (feed)
-docs/                   # Human documentation (getting started, config, deployment, etc.)
-Taskfile.yml            # Developer commands
-docker-compose.yml      # Compose config
-.editorconfig           # Indentation rules
-.env.example            # Environment variable reference
+public/                 # media in <name>/, feeds in <name>.xml
+templates/              # podcast config scaffold used by `task podcastify:new`
+tests/                  # pytest suite
+tasks/                  # Taskfile includes (dev, docker, podcastify)
+docs/                   # human docs; docs/adr/ decisions; docs/agents/ skill config
+GLOSSARY.md             # domain vocabulary
 ```
 
 ## Commands
 
 ```bash
-task docker:up                  # Build and start container
-task docker:down                # Stop and remove
-task podcastify:generate        # Run RSS generator
-task docker:logs                # Follow logs
-task podcastify:new NAME=myshow # Scaffold new podcast config
-task doctor                     # Check environment
-task podcastify:clean:feeds     # Remove generated XML
-task dev:test:coverage          # Tests with coverage gate
+task docker:up                  # build and start container
+task docker:down                # stop and remove
+task docker:logs                # follow logs
+task podcastify:generate        # run RSS generator
+task podcastify:new NAME=myshow # scaffold a podcast config
+task podcastify:clean:feeds     # remove generated XML
+task doctor                     # check environment
+task dev:test:coverage          # tests with 90% coverage gate
+task dev:validate               # tests + Docker build, mirrors CI
 ```
 
-## Architecture (podcastify/)
+## Architecture
 
-| Class / Module      | Responsibility                              |
-|---------------------|---------------------------------------------|
-| Config              | Environment variables and field constants    |
-| MediaProcessor      | ffprobe duration extraction, persistent cache|
-| ConfigurationManager| YAML loading, metadata extraction, discovery |
-| EpisodeManager      | Episode discovery, image URL resolution      |
-| RSSGenerator        | iTunes-compatible XML feed generation        |
-| PodcastProcessor    | Orchestration: load → validate → generate   |
+| Class | Module | Responsibility |
+|---|---|---|
+| `Config` | `config.py` | env vars and field whitelists |
+| `MediaProcessor` | `media.py` | ffprobe duration, persistent cache |
+| `ConfigurationManager`, `EpisodeManager` | `parser.py` | YAML load/validate, episode discovery |
+| `RSSGenerator` | `rss.py` | iTunes RSS XML |
+| `PodcastProcessor` | `cli.py` | load, validate, generate, atomic write |
 
-## AI Workflow
+Invariants and gotchas: `docs/architecture-notes.md`. Runtime and container: `docs/runtime.md`.
 
-- **`AGENTS.md`** is the source of truth regarding AI.
-- **`.claude/`** is the directory where all AI files and resources belong (except `AGENTS.md`).
-- The **`.claude/`** directory contains agents, commands, rules, skills, plans, and templates.
-- **`.opencode/`** contains only `opencode.json` — OpenCode tool configuration, pointing into `.claude/`.
+## Rules
 
-Detailed rules live in [`.claude/rules/rules.md`](.claude/rules/rules.md).
+- Python: 4-space indent, UTF-8, LF. YAML: 2-space indent. See `.editorconfig`.
+- Class-based; PascalCase classes, snake_case functions. Logic lives in `podcastify/`; `app.py` stays thin.
+- No comments unless requested. No unused imports or dead code.
+- No secrets or credentials in commits.
+- Episode GUID defaults to SHA-1 of `<podcast>/<filename>`; renaming breaks subscriber history.
+- Config files are `podcasts/<name>-podcast.yaml`; media in `public/<name>/`; feeds in `public/<name>.xml`.
+- Docker-first: build and run through `task docker:*`.
 
-### Directory layout (`.claude/`)
+## Testing
 
-```
-.claude/
-  agents/             # Claude Code subagent definitions
-  rules/rules.md      # Project rules (auto-loaded by OpenCode)
-  skills/             # Workflow definitions (how to perform each task)
-  commands/           # Slash commands that delegate to a skill
-  plan/               # Feature plans (gitignored scratch)
-    archive/          # Completed plans
-  templates/          # Boilerplate (podcast YAML, test template)
-```
+- `pytest` + `pytest-mock`; tests in `tests/`, one file per class or module; fixtures in `tests/conftest.py`.
+- All new code has tests. Coverage of `podcastify/` stays at or above 90%.
+- Before finishing a change, run `task dev:validate` (CI parity: tests plus Docker build).
 
-### OpenCode ([`.opencode/opencode.json`](.opencode/opencode.json))
+## Git
 
-Set `OPENCODE_CONFIG=.opencode/opencode.json` in `.env` (see [`.env.example`](.env.example)).
-
-| Setting | Value |
-|---------|--------|
-| `default_agent` | `planner` |
-| **Instructions** (always loaded) | `.claude/rules/rules.md`, `AGENTS.md` |
-| **Skills** (flat command-templates) | `.claude/skills/*-command.md` |
-
-| Agent | Mode | OpenCode model | Claude Code model | Used by |
-|-------|------|---|---|---|
-| `planner` | primary | `opencode-go/glm-5.1` | Sonnet 4.6 | Planning, design, `/release` |
-| `builder` | primary | `opencode-go/kimi-k2.6` | Haiku 4.5 | Implementation, `/pr`, `/validate-changes` |
-| `reviewer` | subagent | `opencode-go/kimi-k2.6` | Sonnet 4.6 | Code audit, `/review` |
-| `architect` | subagent | `opencode-go/glm-5.1` | Opus 4.8 | Complex design, documentation |
-
-**Note**: Model IDs differ between OpenCode (opencode-go/*) and Claude Code (Sonnet/Haiku/Opus) — different providers, same roles. Alignment is on names/modes/permissions, not LLM choice.
-
-### Slash commands
-
-Commands defined inline in [`.opencode/opencode.json`](.opencode/opencode.json), referencing flat skill templates under [`.claude/skills/`](.claude/skills/):
-
-| Command | Agent | Skill template |
-|---------|-------|---|
-| `/pr` | builder | `@.claude/skills/pr-command.md` |
-| `/review` | reviewer | `@.claude/skills/review-command.md` |
-| `/release` | planner | `@.claude/skills/release-command.md` |
-| `/validate-changes` | builder | `@.claude/skills/validate-changes-command.md` |
-
-### Optional agent rules
-
-External tool-specific rules files are **not** auto-loaded by OpenCode or Claude Code. Follow them when the workflow or tool requires them (shell/RTK usage, specific IDE agents).
+- Conventional Commits, enforced three ways: the `commit-msg` hook (`task dev:hooks` installs it), the `commits` CI check on every PR (title and each commit subject), and review. Types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`. `!` or a `BREAKING CHANGE:` footer marks a breaking change. No emojis.
+- `main` is protected: changes land only through a PR with the `test`, `docker` and `commits` checks green. No force-push, no deletion, linear history.
+- PRs merge by rebase only, so each commit lands on `main` as written. Keep commits clean before opening the PR.
+- Branch from `main`: `feat/<slug>`, `fix/<slug>`, `chore/<slug>`.
+- Releases: tag `vX.Y.Z` on `main`; `release.yml` builds, scans, pushes the image and creates the GitHub Release from the matching `CHANGELOG.md` section.
+- Never commit, push, tag or rebase unless asked.
