@@ -2,6 +2,7 @@
 """Shared fixtures for podcastify tests."""
 
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -11,17 +12,42 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 @pytest.fixture(autouse=True)
-def reset_env(monkeypatch):
+def reset_env(monkeypatch, tmp_path):
     """Reset environment variables to defaults before each test."""
-    monkeypatch.setenv("PODCASTS_ROOT", "/app/podcasts")
-    monkeypatch.setenv("PUBLIC_ROOT", "/app/public")
-    monkeypatch.setenv("CACHE_ROOT", "/app/.cache")
+    app_root = tmp_path / "app"
+    monkeypatch.setenv("PODCASTS_ROOT", str(app_root / "podcasts"))
+    monkeypatch.setenv("PUBLIC_ROOT", str(app_root / "public"))
+    monkeypatch.setenv("CACHE_ROOT", str(app_root / ".cache"))
     monkeypatch.setenv("PUBLIC_BASE_URL", "http://localhost:8080")
     monkeypatch.setenv("PUBLISH_XML", "true")
     monkeypatch.setenv("RUN_ON_START", "true")
     monkeypatch.setenv("LOG_LEVEL", "INFO")
     from podcastify.logging_config import reset_logger_cache
     reset_logger_cache()
+
+
+def _reset_media_state():
+    from podcastify.media import MediaProcessor
+    MediaProcessor._duration_cache.clear()
+    MediaProcessor._disk_loaded = False
+    MediaProcessor._ffprobe_missing_warned = False
+
+
+@pytest.fixture(autouse=True)
+def reset_media_state():
+    """Reset MediaProcessor class state before and after each test."""
+    _reset_media_state()
+    yield
+    _reset_media_state()
+
+
+@pytest.fixture(autouse=True)
+def mock_ffprobe(mocker):
+    """Stub ffprobe so no test depends on the real binary."""
+    return mocker.patch(
+        "podcastify.media.subprocess.run",
+        return_value=subprocess.CompletedProcess(args=["ffprobe"], returncode=0, stdout="42.0\n", stderr=""),
+    )
 
 
 @pytest.fixture
