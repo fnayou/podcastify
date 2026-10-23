@@ -1,9 +1,9 @@
+import argparse
 import os
-import sys
 import tempfile
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional, Sequence
 
 from podcastify.config import Config
 from podcastify.logging_config import get_logger
@@ -19,7 +19,8 @@ logger = get_logger(__name__)
 
 
 class PodcastProcessor:
-    def __init__(self):
+    def __init__(self, dry_run: bool = False):
+        self.dry_run = dry_run
         self.config_manager = ConfigurationManager()
         self.episode_manager = EpisodeManager()
         self.rss_generator = RSSGenerator()
@@ -123,7 +124,7 @@ class PodcastProcessor:
             logger.debug(f"Episode count: {podcast_name} -> {len(episodes)} episodes")
             logger.debug(f"Sort order: {podcast_name} by pub_date desc")
 
-            if Config.PUBLISH_XML:
+            if Config.PUBLISH_XML and not self.dry_run:
                 xml = self.rss_generator.generate_feed_xml(podcast_name, meta, episodes)
                 out = Config.PUBLIC_ROOT / f"{podcast_name}.xml"
                 logger.debug(f"Write path: {out}, bytes: {len(xml)}")
@@ -165,17 +166,30 @@ class PodcastProcessor:
         for name, cfg_path in configs:
             if self.process_podcast(name, cfg_path):
                 ok += 1
+        failed = len(configs) - ok
         logger.info(f"Processing complete: {ok}/{len(configs)} successful")
-        return ok
+        return failed
 
 
-def main() -> bool:
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="app.py", description="Podcastify RSS generator")
+    subparsers = parser.add_subparsers(dest="command")
+    generate = subparsers.add_parser("generate", help="generate feeds for every podcast config")
+    generate.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="validate configs and episodes without writing feeds",
+    )
+    return parser
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    args = build_parser().parse_args(argv)
     logger.info("Starting podcast RSS generator")
-    processor = PodcastProcessor()
-    should_run = Config.RUN_ON_START or (len(sys.argv) > 1 and sys.argv[1] == "generate")
-    if should_run:
-        count = processor.process_all_podcasts()
-        logger.info(f"Generator finished: {count} podcast(s) processed")
-        return count > 0
+    if args.command == "generate" or Config.RUN_ON_START:
+        processor = PodcastProcessor(dry_run=getattr(args, "dry_run", False))
+        failed = processor.process_all_podcasts()
+        logger.info(f"Generator finished: {failed} podcast(s) failed")
+        return 1 if failed else 0
     logger.info("Generator ready (set RUN_ON_START=true or use 'generate' argument to run)")
-    return True
+    return 0
