@@ -14,7 +14,7 @@ __all__ = [
     "PodcastProcessor",
     "main",
     "_coerce_bool",
-    "_sanitize_name",
+    "_is_valid_name",
 ]
 
 from podcastify import (  # noqa: E402
@@ -25,7 +25,7 @@ from podcastify import (  # noqa: E402
     PodcastProcessor,
     RSSGenerator,
     _coerce_bool,
-    _sanitize_name,
+    _is_valid_name,
 )
 
 if __name__ == "__main__":

@@ -5,7 +5,7 @@ from podcastify.parser import (
     ConfigurationManager,
     EpisodeManager,
     _coerce_bool,
-    _sanitize_name,
+    _is_valid_name,
     rfc2822_date,
     validate_podcast_config,
 )
@@ -21,6 +21,6 @@ __all__ = [
     "main",
     "rfc2822_date",
     "_coerce_bool",
-    "_sanitize_name",
+    "_is_valid_name",
     "validate_podcast_config",
 ]

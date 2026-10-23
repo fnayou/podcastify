@@ -72,6 +72,21 @@ class TestMain:
         assert "<pubDate>Sat, 01 Feb 2025 06:00:00 +0000</pubDate>" in xml
         assert "<pubDate>Wed, 01 Jan 2025 00:00:00 +0000</pubDate>" in xml
 
+    def test_duplicate_episode_rejects_podcast(self, tmp_path, monkeypatch, caplog):
+        monkeypatch.setattr("podcastify.config.Config.PODCASTS_ROOT", tmp_path)
+        monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
+        monkeypatch.setattr("podcastify.config.Config.PUBLISH_XML", True)
+        (tmp_path / "myshow-podcast.yaml").write_text(
+            "title: T\ndescription: D\nepisodes:\n  - {file: a.mp3}\n  - {file: a.mp3}\n",
+            encoding="utf-8",
+        )
+        pub = tmp_path / "myshow"
+        pub.mkdir()
+        (pub / "a.mp3").write_bytes(b"\x00" * 64)
+        assert main(["generate"]) == 1
+        assert not (tmp_path / "myshow.xml").exists()
+        assert any("duplicate episode file 'a.mp3'" in r.message for r in caplog.records)
+
     def test_no_configs_exits_zero(self, tmp_path, monkeypatch):
         monkeypatch.setattr("podcastify.config.Config.PODCASTS_ROOT", tmp_path)
         monkeypatch.setattr("podcastify.config.Config.RUN_ON_START", True)
