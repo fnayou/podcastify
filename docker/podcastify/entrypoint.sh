@@ -57,17 +57,33 @@ case "$run_on_start" in
   true|yes|1|on) run_on_start=true ;;
 esac
 
+generate_interval="$(printf '%s' "${GENERATE_INTERVAL:-0}" | tr -d '[:space:]')"
+case "$generate_interval" in
+  ''|*[!0-9]*)
+    echo "⚠️  GENERATE_INTERVAL='${GENERATE_INTERVAL}' is not a whole number of seconds; auto-regeneration off"
+    generate_interval=0
+    ;;
+esac
+
+watch_args=""
 if [ "$run_on_start" = "true" ]; then
   echo "🎙️  Running generator at startup..."
   if ! $RUNAS python /app/app.py generate; then
     echo "⚠️  Generator exited non-zero; continuing to serve existing content"
+    watch_args="--initial-run"
   fi
+fi
+
+if [ "$generate_interval" -gt 0 ]; then
+  echo "🔁 Checking configs and media for changes every ${generate_interval}s"
+  $RUNAS python /app/app.py watch --interval "$generate_interval" $watch_args &
 fi
 
 echo "🌐 Starting Caddy on :${SERVICE_PORT:-8080}"
 
-# Caddy is the only long-running process and logs to stdout itself, so it runs
-# in the foreground directly — no supervisor. tini is PID 1 for the whole
-# container life (Dockerfile ENTRYPOINT) and forwards signals to this script,
-# then to Caddy; $RUNAS is empty in hardened mode, su-exec in root mode.
+# Caddy runs in the foreground and logs to stdout itself — no supervisor. tini
+# is PID 1 for the whole container life (Dockerfile ENTRYPOINT), forwards
+# signals to this script, then to Caddy, and reaps the optional background
+# watcher, which stops with the container when Caddy exits; $RUNAS is empty in
+# hardened mode, su-exec in root mode.
 exec $RUNAS caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
