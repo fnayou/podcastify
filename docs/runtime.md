@@ -25,23 +25,33 @@ Since the base image `python:3.12-alpine3.22` already pins the Alpine version an
 ### Tini as PID 1, Caddy in the foreground
 
 Caddy is the only long-running process (the generator runs once at boot), so it
-runs in the foreground under `tini` — no supervisor. The entrypoint invokes
-`tini` as PID 1:
+runs in the foreground under `tini` — no supervisor. `tini` is PID 1 for the
+whole container life: the image entrypoint is
+`["/sbin/tini", "--", "/entrypoint.sh"]`, and the script ends with:
 
 ```bash
-exec /sbin/tini -- $RUNAS caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+exec $RUNAS caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
 ```
 
-`tini` ensures zombie process cleanup when ffprobe (spawned by MediaProcessor)
-exits, preventing resource leaks in long-running container scenarios.
+`tini` forwards signals, so `docker stop` ends the container promptly both
+during the boot generation and once Caddy serves. Without it, the shell would be
+PID 1 during generation, ignore SIGTERM, and be killed after the stop timeout.
+ffprobe children are reaped by `subprocess.run` itself.
+
+`RUN_ON_START` is read case-insensitively by the entrypoint, with the same
+values as the generator: `true/yes/1/on` run the generator at boot.
 
 ### Non-root via PUID/PGID
 
 The image supports two runtimes (see `entrypoint.sh`):
 
-- **Root start (default/convenience):** the entrypoint chowns the writable dirs
-  to `PUID`/`PGID` (default `1000`) and drops privileges with `su-exec`. Adapts
-  to any host bind-mount owner (NAS/desktop). `$RUNAS` = `su-exec <uid>:<gid>`.
+- **Root start (default/convenience):** the entrypoint chowns only what the app
+  writes to `PUID`/`PGID` (default `1000`): `CACHE_ROOT` recursively,
+  `PUBLIC_ROOT` itself and the feeds `PUBLIC_ROOT/*.xml`. Media under
+  `PUBLIC_ROOT/<name>/` and the configs in `PODCASTS_ROOT` keep their host
+  owner. Paths that already match are skipped, and a failed chown prints its
+  error and a warning. It then drops privileges with `su-exec`. Adapts to any
+  host bind-mount owner (NAS/desktop). `$RUNAS` = `su-exec <uid>:<gid>`.
 - **Non-root start (hardened):** when the operator pins the container `user:`,
   the entrypoint skips chown/`su-exec` and runs directly. This is compatible
   with `cap_drop: ALL` + `read_only` because no privileged ops are performed —
