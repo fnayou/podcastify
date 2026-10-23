@@ -42,6 +42,26 @@ class TestProcessPodcast:
         assert ok is False
         assert any(record.levelname == "ERROR" for record in caplog.records)
 
+    def test_unexpected_error_logs_traceback(self, tmp_path, monkeypatch, caplog, mocker):
+        monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
+        cfg = tmp_path / "myshow-podcast.yaml"
+        cfg.write_text(
+            yaml.safe_dump({"title": "T", "description": "D", "episodes": [{"file": "ep01.mp3"}]}),
+            encoding="utf-8",
+        )
+        pub = tmp_path / "myshow"
+        pub.mkdir()
+        (pub / "ep01.mp3").write_bytes(b"\x00" * 64)
+        mocker.patch(
+            "podcastify.cli.RSSGenerator.generate_feed_xml", side_effect=TypeError("boom")
+        )
+        ok = PodcastProcessor().process_podcast("myshow", cfg)
+        assert ok is False
+        record = next(r for r in caplog.records if "Failed to process myshow" in r.message)
+        assert record.levelname == "ERROR"
+        assert record.exc_info[0] is TypeError
+        assert not (tmp_path / "myshow.xml").exists()
+
     def test_validation_failure(self, tmp_path, monkeypatch, caplog):
         monkeypatch.setattr("podcastify.config.Config.PODCASTS_ROOT", tmp_path)
         monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)

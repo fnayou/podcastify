@@ -1,10 +1,9 @@
 from podcastify.cli import PodcastProcessor, main
-from podcastify.config import Config
+from podcastify.config import Config, _coerce_bool
 from podcastify.media import MediaProcessor
 from podcastify.parser import (
     ConfigurationManager,
     EpisodeManager,
-    _coerce_bool,
     _is_valid_name,
     rfc2822_date,
     validate_podcast_config,

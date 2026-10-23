@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Shared fixtures for podcastify tests."""
 
+import logging
 import os
 import subprocess
 import sys
@@ -22,8 +23,22 @@ def reset_env(monkeypatch, tmp_path):
     monkeypatch.setenv("PUBLISH_XML", "true")
     monkeypatch.setenv("RUN_ON_START", "true")
     monkeypatch.setenv("LOG_LEVEL", "INFO")
-    from podcastify.logging_config import reset_logger_cache
-    reset_logger_cache()
+
+
+@pytest.fixture(autouse=True)
+def reset_package_logger():
+    """Give every test an unconfigured package logger at INFO."""
+    logger = logging.getLogger("podcastify")
+
+    def reset():
+        for handler in logger.handlers[:]:
+            logger.removeHandler(handler)
+        logger.propagate = True
+        logger.setLevel(logging.INFO)
+
+    reset()
+    yield
+    reset()
 
 
 def _reset_media_state():
