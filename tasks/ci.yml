@@ -1,0 +1,16 @@
+version: "3"
+
+tasks:
+  durations:
+    desc: Print job durations of the latest successful CI and Release runs (needs gh; LIMIT=5)
+    silent: true
+    vars:
+      LIMIT: '{{.LIMIT | default "5"}}'
+    cmds:
+      - |
+        for wf in CI Release; do
+          echo "$wf"
+          for id in $(gh run list --workflow "$wf" --status success --limit {{.LIMIT}} --json databaseId --jq '.[].databaseId'); do
+            gh run view "$id" --json displayTitle,jobs --jq '[.jobs[] | {n: .name, s: (.startedAt | fromdateiso8601), e: (.completedAt | fromdateiso8601)}] as $j | "  '"$id"' " + ([$j[] | "\(.n)=\(.e - .s)s"] | join(" ")) + " total=\(([$j[].e] | max) - ([$j[].s] | min))s  \(.displayTitle)"'
+          done
+        done
