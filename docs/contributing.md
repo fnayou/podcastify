@@ -72,6 +72,8 @@ task docker:clean
 - PascalCase for classes, snake_case for functions
 - No unused imports or dead code
 
+`ruff` lints and formats Python (config in `pyproject.toml`), and `hadolint` lints the Dockerfile. Both run as pre-commit hooks (`task dev:hooks`) and in the CI `test` job. To check everything at once: `.venv/bin/pre-commit run --all-files`. The hadolint hook needs Docker.
+
 ## Commit Conventions
 
 [Conventional Commits](https://www.conventionalcommits.org/): `<type>[scope][!]: <description>`.
