@@ -5,6 +5,12 @@ vars:
   FIRST_COMMIT: f1e964de
 
 tasks:
+  tag:
+    desc: Propose the next CalVer tag, preview the notes, create the annotated tag locally (never pushes; PRERELEASE=rc for a candidate; -- --dry-run to rehearse)
+    interactive: true
+    cmds:
+      - python3 tools/release_tag.py {{if .PRERELEASE}}--prerelease {{.PRERELEASE}}{{end}} {{.CLI_ARGS}}
+
   changelog:
     desc: Preview the GitHub Release notes with the CI config and range (needs Docker; TAG=vYYYY.M.PATCH optional)
     silent: true
