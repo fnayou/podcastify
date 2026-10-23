@@ -44,6 +44,7 @@ def reset_package_logger():
 def _reset_media_state():
     from podcastify.media import MediaProcessor
     MediaProcessor._duration_cache.clear()
+    MediaProcessor._unpersisted.clear()
     MediaProcessor._disk_loaded = False
     MediaProcessor._ffprobe_missing_warned = False
 

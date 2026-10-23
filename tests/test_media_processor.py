@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Tests for MediaProcessor class."""
 
+import json
 import subprocess
 from pathlib import Path
 
@@ -388,3 +389,90 @@ class TestGetDurationSeconds:
         content = cache_file.read_text(encoding="utf-8")
         assert "555.5" in content
         assert str(mock_mp3) in content
+
+
+def _restart_process():
+    MediaProcessor._duration_cache.clear()
+    MediaProcessor._unpersisted.clear()
+    MediaProcessor._disk_loaded = False
+
+
+class TestCacheRobustness:
+    @pytest.fixture
+    def cache_file(self, tmp_path, monkeypatch):
+        cache_root = tmp_path / "cache"
+        cache_root.mkdir()
+        monkeypatch.setattr("podcastify.config.Config.CACHE_ROOT", cache_root)
+        MediaProcessor.clear_cache()
+        return cache_root / ".podcastify-cache.json"
+
+    def test_timeout_is_cached_in_memory_only(self, mocker, mock_mp3, cache_file):
+        run = mocker.patch(
+            "podcastify.media.subprocess.run",
+            side_effect=subprocess.TimeoutExpired("ffprobe", 30),
+        )
+        assert MediaProcessor.get_duration_seconds(mock_mp3) is None
+        assert MediaProcessor.get_duration_seconds(mock_mp3) is None
+        assert run.call_count == 1
+        assert not cache_file.exists() or str(mock_mp3) not in cache_file.read_text(encoding="utf-8")
+
+    def test_timeout_is_retried_in_the_next_process(self, mocker, mock_mp3, cache_file):
+        mocker.patch(
+            "podcastify.media.subprocess.run",
+            side_effect=subprocess.TimeoutExpired("ffprobe", 30),
+        )
+        MediaProcessor.get_duration_seconds(mock_mp3)
+        _restart_process()
+        run = mocker.patch(
+            "podcastify.media.subprocess.run",
+            return_value=mocker.Mock(stdout="77.0\n", stderr=""),
+        )
+        assert MediaProcessor.get_duration_seconds(mock_mp3) == 77.0
+        assert run.call_count == 1
+
+    def test_timeout_is_not_saved_when_other_entries_are(self, mocker, tmp_path, cache_file):
+        slow = tmp_path / "slow.mp3"
+        fast = tmp_path / "fast.mp3"
+        slow.write_bytes(b"\x00" * 64)
+        fast.write_bytes(b"\x00" * 64)
+
+        def fake_run(args, **kwargs):
+            if args[-1] == str(slow):
+                raise subprocess.TimeoutExpired("ffprobe", 30)
+            return mocker.Mock(stdout="12.0\n", stderr="")
+
+        mocker.patch("podcastify.media.subprocess.run", side_effect=fake_run)
+        MediaProcessor.warm_durations_parallel([slow, fast])
+        saved = json.loads(cache_file.read_text(encoding="utf-8"))
+        assert [k.rsplit("|", 1)[0] for k in saved] == [str(fast)]
+
+    def test_other_failures_are_still_persisted(self, mocker, mock_mp3, cache_file):
+        mocker.patch(
+            "podcastify.media.subprocess.run",
+            side_effect=subprocess.CalledProcessError(1, "ffprobe"),
+        )
+        MediaProcessor.get_duration_seconds(mock_mp3)
+        saved = json.loads(cache_file.read_text(encoding="utf-8"))
+        assert list(saved.values()) == [None]
+
+    def test_save_keeps_newest_mtime_per_path(self, mock_mp3, cache_file):
+        path = str(mock_mp3)
+        MediaProcessor._duration_cache[(path, 100.0)] = 1.0
+        MediaProcessor._duration_cache[(path, 300.0)] = 3.0
+        MediaProcessor._duration_cache[(path, 200.0)] = 2.0
+        MediaProcessor._save_disk_cache()
+        saved = json.loads(cache_file.read_text(encoding="utf-8"))
+        assert saved == {f"{path}|300.0": 3.0}
+
+    def test_save_drops_older_entries_when_newest_is_a_timeout(self, mock_mp3, cache_file):
+        path = str(mock_mp3)
+        MediaProcessor._duration_cache[(path, 100.0)] = 1.0
+        MediaProcessor._duration_cache[(path, 200.0)] = None
+        MediaProcessor._unpersisted.add((path, 200.0))
+        MediaProcessor._save_disk_cache()
+        assert json.loads(cache_file.read_text(encoding="utf-8")) == {}
+
+    def test_clear_cache_forgets_unpersisted_keys(self):
+        MediaProcessor._unpersisted.add(("x", 1.0))
+        MediaProcessor.clear_cache()
+        assert MediaProcessor._unpersisted == set()
