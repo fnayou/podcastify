@@ -1,5 +1,5 @@
 import email.utils as eut
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 from urllib.parse import quote
@@ -41,7 +41,7 @@ class EpisodeModel(BaseModel):
     description: Optional[str] = None
     summary: Optional[str] = None
     subtitle: Optional[str] = None
-    pub_date: Optional[str] = None
+    pub_date: Optional[datetime] = None
     image: Optional[str] = None
     explicit: Optional[bool] = None
     author_name: Optional[str] = Field(None, alias="author-name")
@@ -50,6 +50,28 @@ class EpisodeModel(BaseModel):
     episode_type: Optional[str] = None
     guid: Optional[str] = None
     duration_hms: Optional[str] = None
+
+    @field_validator("pub_date", mode="before")
+    @classmethod
+    def parse_pub_date(cls, v: Any) -> Optional[datetime]:
+        if v is None or v == "":
+            return None
+        if isinstance(v, datetime):
+            parsed = v
+        elif isinstance(v, date):
+            parsed = datetime(v.year, v.month, v.day)
+        elif isinstance(v, str):
+            try:
+                parsed = datetime.fromisoformat(v.strip())
+            except ValueError:
+                logger.warning(f"Invalid pub_date '{v}'; using file modification time")
+                return None
+        else:
+            logger.warning(f"Invalid pub_date '{v}'; using file modification time")
+            return None
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed
 
 
 class PodcastChannelModel(BaseModel):
@@ -172,6 +194,7 @@ class EpisodeManager:
                 fname = Path(e.get("file", "")).name
                 ep = dict(e)
                 ep["__resolved_path"] = pub_dir / fname
+                ep["__published"] = EpisodeManager._published(ep)
                 discovered.append(ep)
             return discovered
 
@@ -180,12 +203,25 @@ class EpisodeManager:
 
         discovered = []
         for mp3 in sorted(pub_dir.glob("*.mp3")):
-            discovered.append({
+            ep = {
                 "file": mp3.name,
                 "title": mp3.stem,
                 "__resolved_path": mp3,
-            })
+            }
+            ep["__published"] = EpisodeManager._published(ep)
+            discovered.append(ep)
         return discovered
+
+    @staticmethod
+    def _published(episode: Dict[str, Any]) -> datetime:
+        pub_date = episode.get("pub_date")
+        if isinstance(pub_date, datetime):
+            return pub_date
+        try:
+            mtime = Path(episode["__resolved_path"]).stat().st_mtime
+        except OSError:
+            mtime = 0.0
+        return datetime.fromtimestamp(mtime, tz=timezone.utc)
 
     @staticmethod
     def media_url(podcast_name: str, file_name: str) -> str:

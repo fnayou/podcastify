@@ -183,20 +183,7 @@ class RSSGenerator:
 
         length = stat_result.st_size if stat_result else 0
 
-        pub_str = episode.get("pub_date")
-        if pub_str:
-            try:
-                pub_dt = datetime.fromisoformat(pub_str.replace("Z", "+00:00"))
-                logger.debug(f"Parse pub_date: {fname} -> {pub_dt}")
-            except (ValueError, AttributeError):
-                logger.warning(f"Invalid pub_date for {fname}: {pub_str}")
-                pub_dt = datetime.fromtimestamp(
-                    stat_result.st_mtime if stat_result else 0, tz=timezone.utc
-                )
-        else:
-            pub_dt = datetime.fromtimestamp(
-                stat_result.st_mtime if stat_result else 0, tz=timezone.utc
-            )
+        pub_dt = episode["__published"]
 
         guid_val = episode.get("guid") or hashlib.sha1(
             f"{podcast_name}/{fname}".encode("utf-8")

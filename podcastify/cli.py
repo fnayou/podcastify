@@ -1,7 +1,6 @@
 import argparse
 import os
 import tempfile
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional, Sequence
 
@@ -99,27 +98,7 @@ class PodcastProcessor:
             paths = [Path(e["__resolved_path"]) for e in episodes]
             MediaProcessor.warm_durations_parallel(paths)
 
-            def _ep_ts(ep: Dict[str, Any]) -> float:
-                pd = ep.get("pub_date")
-                if pd:
-                    try:
-                        return datetime.fromisoformat(
-                            pd.replace("Z", "+00:00")
-                        ).timestamp()
-                    except Exception:
-                        pass
-                return ep.get("__mtime", 0.0)
-
-            for ep in episodes:
-                if "__mtime" not in ep:
-                    p = ep.get("__resolved_path")
-                    try:
-                        pth = p if isinstance(p, Path) else Path(str(p))
-                        ep["__mtime"] = pth.stat().st_mtime
-                    except Exception:
-                        ep["__mtime"] = 0.0
-
-            episodes.sort(key=_ep_ts, reverse=True)
+            episodes.sort(key=lambda ep: ep["__published"], reverse=True)
 
             logger.debug(f"Episode count: {podcast_name} -> {len(episodes)} episodes")
             logger.debug(f"Sort order: {podcast_name} by pub_date desc")
