@@ -68,7 +68,9 @@ categories:
 
 ## Episodes
 
-If you omit the `episodes:` list, Podcastify auto-discovers all `*.mp3` files in `public/<name>/`, sorted by modification time (newest first).
+If you omit the `episodes:` list, Podcastify auto-discovers all `.mp3`, `.m4a`, `.mp4`, `.ogg` and `.opus` files in `public/<name>/`, matched case-insensitively (`EP01.MP3` is found), sorted by modification time (newest first).
+
+Each enclosure carries the MIME type of its extension: `audio/mpeg` (`.mp3`), `audio/x-m4a` (`.m4a`), `video/mp4` (`.mp4`), `audio/ogg` (`.ogg`) and `audio/opus` (`.opus`). Any other extension named in `episodes:` is published as `audio/mpeg`.
 
 Set `pub_date` on every episode for a stable feed. The modification time changes when files are copied, restored from a backup or moved to another host, which reorders episodes and gives them new `pubDate` values, so some podcast apps show them as new.
 
@@ -92,7 +94,7 @@ episodes:
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `file` | string | Yes | MP3 filename (basename only, placed in `public/<name>/`). |
+| `file` | string | Yes | Media filename: `.mp3`, `.m4a`, `.mp4`, `.ogg` or `.opus` (basename only, placed in `public/<name>/`). |
 | `title` | string | No | Episode title. Defaults to the filename stem. |
 | `description` | string | No | Episode description. |
 | `summary` | string | No | Longer summary. Falls back to `description`. |

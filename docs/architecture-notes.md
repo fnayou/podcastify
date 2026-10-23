@@ -33,8 +33,10 @@ not covered there. Read both before proposing changes to `podcastify/`.
   data; both must stay in sync. Stabilization task: render from the validated
   model instead of the raw dict.
 - **Episode source priority**: an explicit `episodes:` list (validated via
-  pydantic) wins over auto-scanning `public/<name>/*.mp3` —
-  `discover_episodes` (parser.py).
+  pydantic) wins over auto-scanning `public/<name>/` for `Config.MEDIA_TYPES`
+  extensions, case-insensitive — `discover_episodes` (parser.py). The same map
+  sets the enclosure `type` via `EpisodeManager.media_type`; unknown
+  extensions default to `audio/mpeg`.
 - **Duration cache**: in-memory `_duration_cache` keyed by `(path, mtime)`,
   persisted to `<PUBLIC_ROOT>/.podcastify-cache.json` (media.py,38).
   Invalidates on mtime change, but entries for deleted files are never pruned.
