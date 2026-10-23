@@ -87,7 +87,7 @@ To increase verbosity and see detailed trace information (config discovery, epis
 LOG_LEVEL=DEBUG docker compose up
 
 # On-demand generate
-docker compose exec -e LOG_LEVEL=DEBUG podcastify python /app/app.py generate
+docker compose exec -e LOG_LEVEL=DEBUG podcastify /entrypoint.sh generate
 
 # Or in .env
 LOG_LEVEL=DEBUG

@@ -57,6 +57,11 @@ The image supports two runtimes (see `entrypoint.sh`):
   with `cap_drop: ALL` + `read_only` because no privileged ops are performed —
   the bind-mounts must already be owned by that uid. `$RUNAS` is empty.
 
+`entrypoint.sh generate [--dry-run]` runs the generator once under the same
+`$RUNAS` and exits, after the same preparation. `task podcastify:generate` and
+the documented `docker compose exec podcastify /entrypoint.sh generate` use it,
+so on-demand runs write files as `PUID`/`PGID`, never root.
+
 Caddy data/config are relocated under `XDG_DATA_HOME`/`XDG_CONFIG_HOME`
 (`/app/.cache/caddy`, on the cache volume) so nothing is written to the
 read-only root filesystem.
