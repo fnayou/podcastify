@@ -74,7 +74,48 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.created=${{ steps.meta.outputs.created }}
 
-      - name: Build & Push
+      - name: Build for scan (amd64, no push)
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: docker/podcastify/Dockerfile
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: local/podcastify:${{ github.sha }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Trivy scan (blocking on CRITICAL and HIGH)
+        id: trivy
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: "local/podcastify:${{ github.sha }}"
+          format: "json"
+          output: "trivy-results.json"
+          vuln-type: "os,library"
+          severity: "CRITICAL,HIGH"
+          ignore-unfixed: true
+          exit-code: "1"
+          hide-progress: true
+
+      - name: Trivy report (table and SARIF from the same scan)
+        if: ${{ !cancelled() && hashFiles('trivy-results.json') != '' }}
+        shell: bash
+        run: |
+          trivy convert --format table --output trivy-results.txt trivy-results.json
+          cat trivy-results.txt
+          { echo '```'; cat trivy-results.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          trivy convert --format sarif --output trivy-results.sarif trivy-results.json
+
+      - name: Upload SARIF (Trivy)
+        if: ${{ !cancelled() && hashFiles('trivy-results.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@4bfa242aa49c5f7c6770b98670d354a7dfac05f8 # v3.39.1
+        with:
+          sarif_file: "trivy-results.sarif"
+
+      - name: Push (multi-arch, amd64 from the scanned build cache)
         id: build-push
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
@@ -88,35 +129,6 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      - name: Trivy scan (push, fail on CRITICAL)
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          image-ref: "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build-push.outputs.digest }}"
-          format: "table"
-          vuln-type: "os,library"
-          severity: "CRITICAL"
-          ignore-unfixed: true
-          exit-code: "1"
-          hide-progress: true
-
-      - name: Trivy SARIF (push)
-        id: sarif-push
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          image-ref: "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build-push.outputs.digest }}"
-          format: "sarif"
-          output: "trivy-results.sarif"
-          vuln-type: "os,library"
-          severity: "CRITICAL,HIGH,MEDIUM,LOW"
-          ignore-unfixed: true
-          hide-progress: true
-
-      - name: Upload SARIF (Trivy, push)
-        if: steps.sarif-push.outcome == 'success'
-        uses: github/codeql-action/upload-sarif@4bfa242aa49c5f7c6770b98670d354a7dfac05f8 # v3.39.1
-        with:
-          sarif_file: "trivy-results.sarif"
 
       - name: Generate artifact attestation
         uses: actions/attest-build-provenance@ef244123eb79f2f7a7e75d99086184180e6d0018 # v1.4.4
