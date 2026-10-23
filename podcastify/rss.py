@@ -214,7 +214,7 @@ class RSSGenerator:
             if desc.strip()
             else "      <description></description>",
             f"      <pubDate>{rfc2822_date(pub_dt)}</pubDate>",
-            f'      <enclosure url="{esc(media_url)}" length="{length}" type="audio/mpeg"/>',
+            f'      <enclosure url="{esc(media_url)}" length="{length}" type="{EpisodeManager.media_type(file_path)}"/>',
             f"      <itunes:explicit>{'yes' if explicit else 'no'}</itunes:explicit>",
             f"      <itunes:author>{esc(author)}</itunes:author>",
         ]

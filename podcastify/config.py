@@ -37,4 +37,14 @@ class Config:
         "episode_type", "guid", "duration_hms",
     ]
 
+    MEDIA_TYPES = {
+        ".mp3": "audio/mpeg",
+        ".m4a": "audio/x-m4a",
+        ".mp4": "video/mp4",
+        ".ogg": "audio/ogg",
+        ".opus": "audio/opus",
+    }
+
+    DEFAULT_MEDIA_TYPE = "audio/mpeg"
+
     CACHE_FILENAME = ".podcastify-cache.json"

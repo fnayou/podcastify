@@ -184,6 +184,31 @@ class TestGenerateFeedXml:
         assert "<itunes:episodeType>" not in item
 
 
+class TestEnclosureType:
+    @pytest.mark.parametrize(
+        "name, expected",
+        [
+            ("ep.mp3", "audio/mpeg"),
+            ("ep.MP3", "audio/mpeg"),
+            ("ep.m4a", "audio/x-m4a"),
+            ("ep.mp4", "video/mp4"),
+            ("ep.ogg", "audio/ogg"),
+            ("ep.opus", "audio/opus"),
+        ],
+    )
+    def test_enclosure_type_follows_extension(self, tmp_path, monkeypatch, name, expected):
+        monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
+        pub_dir = tmp_path / "myshow"
+        pub_dir.mkdir()
+        (pub_dir / name).write_bytes(b"\x00" * 64)
+        item = RSSGenerator()._build_episode_item(
+            "myshow",
+            {"file": name, "__resolved_path": pub_dir / name, "__published": PUBLISHED},
+            {"author-name": "Author"},
+        )
+        assert f'type="{expected}"/>' in item
+
+
 class TestMediaUrls:
     def test_enclosure_url_encoded_and_escaped_once(self, tmp_path, monkeypatch):
         monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
