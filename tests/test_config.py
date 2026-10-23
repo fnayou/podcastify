@@ -7,10 +7,12 @@ from podcastify.config import Config
 
 
 class TestConfigDefaults:
-    def test_default_podcasts_root(self):
+    def test_default_podcasts_root(self, monkeypatch):
+        monkeypatch.delenv("PODCASTS_ROOT")
         assert Config.PODCASTS_ROOT == Path("/app/podcasts")
 
-    def test_default_public_root(self):
+    def test_default_public_root(self, monkeypatch):
+        monkeypatch.delenv("PUBLIC_ROOT")
         assert Config.PUBLIC_ROOT == Path("/app/public")
 
     def test_default_base_url(self):
