@@ -6,182 +6,214 @@ from datetime import datetime, timezone
 
 import pytest
 
+from podcastify.parser import Episode, EpisodeModel, PodcastChannelModel
 from podcastify.rss import RSSGenerator
 
 PUBLISHED = datetime(2024, 1, 1, tzinfo=timezone.utc)
+IT = "{http://www.itunes.com/dtds/podcast-1.0.dtd}"
 
 
-class TestXmlEscape:
-    def test_string(self):
-        assert RSSGenerator.xml_escape("Hello & World") == "Hello &amp; World"
+def _channel(**fields):
+    return PodcastChannelModel.model_validate({"title": "T", "description": "D", **fields})
 
-    def test_quotes(self):
-        assert RSSGenerator.xml_escape('He said "hi"') == "He said &quot;hi&quot;"
 
-    def test_none(self):
-        assert RSSGenerator.xml_escape(None) == ""
+def _episode(path, **fields):
+    return Episode(EpisodeModel.model_validate({"file": path.name, **fields}), path, PUBLISHED)
 
-    def test_int(self):
-        assert RSSGenerator.xml_escape(42) == "42"
 
+def _xml(channel, episodes=(), podcast="myshow"):
+    return RSSGenerator().generate_feed_xml(podcast, channel, list(episodes))
+
+
+def _feed(channel, episodes=(), podcast="myshow"):
+    return ET.fromstring(_xml(channel, episodes, podcast).encode("utf-8")).find("channel")
+
+
+@pytest.fixture
+def pub_dir(tmp_path, monkeypatch):
+    monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
+    monkeypatch.setattr("podcastify.config.Config.BASE_URL", "http://localhost:8080")
+    directory = tmp_path / "myshow"
+    directory.mkdir()
+    return directory
+
+
+@pytest.fixture
+def mp3(pub_dir):
+    path = pub_dir / "ep01.mp3"
+    path.write_bytes(b"\x00" * 64)
+    return path
+
+
+class TestStripIllegalXmlChars:
     def test_removes_illegal_xml_chars(self):
-        assert RSSGenerator.xml_escape("a\x00b\x08c\x0bd\x0ce\x1ff￾g￿h\ti\nj") == "abcdefgh\ti\nj"
+        assert RSSGenerator.strip_illegal_xml_chars("a\x00b\x08c\x0bd\x0ce\x1ff￾g￿h\ti\nj") == "abcdefgh\ti\nj"
 
 
-class TestBuildItunesCategories:
-    def test_string(self):
-        result = RSSGenerator.build_itunes_categories("Technology")
-        assert 'text="Technology"' in result
+class TestItunesCategories:
+    def _categories(self, categories):
+        channel = _feed(_channel(categories=categories))
+        return [
+            (c.get("text"), [s.get("text") for s in c.findall(f"{IT}category")])
+            for c in channel.findall(f"{IT}category")
+        ]
 
-    def test_list_of_strings(self):
-        result = RSSGenerator.build_itunes_categories(["Technology", "Education"])
-        assert 'text="Technology"' in result
-        assert 'text="Education"' in result
+    def test_string(self, pub_dir):
+        assert self._categories("Technology") == [("Technology", [])]
 
-    def test_nested_list(self):
-        result = RSSGenerator.build_itunes_categories([["Society & Culture", "Personal Journals"]])
-        assert 'text="Society &amp; Culture"' in result
-        assert 'text="Personal Journals"' in result
+    def test_list_of_strings(self, pub_dir):
+        assert self._categories(["Technology", "Education"]) == [("Technology", []), ("Education", [])]
 
-    def test_dict_style(self):
-        result = RSSGenerator.build_itunes_categories([{"name": "Technology", "sub": "Software How-To"}])
-        assert 'text="Technology"' in result
-        assert 'text="Software How-To"' in result
+    def test_nested_list(self, pub_dir):
+        assert self._categories([["Society & Culture", "Personal Journals"]]) == [
+            ("Society & Culture", ["Personal Journals"])
+        ]
 
-    def test_empty(self):
-        assert RSSGenerator.build_itunes_categories("") == ""
-        assert RSSGenerator.build_itunes_categories([]) == ""
-        assert RSSGenerator.build_itunes_categories(None) == ""
+    def test_dict_style(self, pub_dir):
+        assert self._categories([{"name": "Technology", "sub": "Software How-To"}]) == [
+            ("Technology", ["Software How-To"])
+        ]
 
-    def test_dict_single(self):
-        result = RSSGenerator.build_itunes_categories({"name": "Arts", "sub": "Books"})
-        assert 'text="Arts"' in result
-        assert 'text="Books"' in result
+    def test_dict_single(self, pub_dir):
+        assert self._categories({"name": "Arts", "sub": "Books"}) == [("Arts", ["Books"])]
+
+    @pytest.mark.parametrize("categories", ["", " ", [], None, [["Only parent"]], [{"sub": "x"}], [5]])
+    def test_empty_or_unusable(self, pub_dir, categories):
+        assert self._categories(categories) == []
+
+    def test_non_string_sub_is_dropped(self, pub_dir):
+        assert self._categories([["Arts", 5], {"name": "Music", "sub": " "}]) == [("Arts", []), ("Music", [])]
 
 
 class TestGenerateFeedXml:
-    def test_basic_structure(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
-        pub_dir = tmp_path / "myshow"
-        pub_dir.mkdir()
-        (pub_dir / "ep01.mp3").write_bytes(b"\x00" * 64)
-        gen = RSSGenerator()
-        xml = gen.generate_feed_xml(
-            "myshow",
-            {"title": "My Show", "description": "Test", "language": "en", "author-name": "Author"},
-            [{"file": "ep01.mp3", "__resolved_path": pub_dir / "ep01.mp3", "__published": PUBLISHED}],
-        )
-        assert '<?xml version="1.0" encoding="UTF-8"?>' in xml
-        assert '<rss version="2.0"' in xml
-        assert "<channel>" in xml
-        assert "<item>" in xml
-        assert "</rss>" in xml
+    def test_basic_structure(self, mp3):
+        xml = _xml(_channel(**{"author-name": "Author"}), [_episode(mp3)])
+        assert xml.startswith("<?xml version='1.0' encoding='utf-8'?>\n<rss ")
+        assert 'xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd"' in xml
+        root = ET.fromstring(xml.encode("utf-8"))
+        assert root.tag == "rss"
+        assert root.get("version") == "2.0"
+        assert len(root.findall("./channel/item")) == 1
 
-    def test_channel_metadata(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
-        pub_dir = tmp_path / "myshow"
-        pub_dir.mkdir()
-        gen = RSSGenerator()
-        channel = gen._build_channel_metadata(
-            "myshow",
-            {
-                "title": "Title",
-                "description": "Desc",
-                "language": "fr",
-                "author-name": "Author",
-                "author-email": "a@b.com",
-                "explicit": True,
-                "subtitle": "Sub",
-                "summary": "Sum",
-                "categories": ["Arts"],
-                "type": "serial",
-                "block": True,
-                "complete": True,
-                "new_feed_url": "https://new.example.com/feed.xml",
-            },
-            "Mon, 01 Jan 2024 00:00:00 +0000",
+    def test_channel_metadata(self, pub_dir):
+        channel = _feed(
+            _channel(
+                title="Title",
+                description="Desc",
+                language="fr",
+                explicit=True,
+                subtitle="Sub",
+                summary="Sum",
+                categories=["Arts"],
+                type="serial",
+                block=True,
+                complete=True,
+                new_feed_url="https://new.example.com/feed.xml",
+                link="https://example.com/show",
+                **{"author-name": "Author", "author-email": "a@b.com"},
+            )
         )
-        assert "<title>Title</title>" in channel
-        assert "<description><![CDATA[Desc]]></description>" in channel
-        assert "<language>fr</language>" in channel
-        assert "<itunes:explicit>yes</itunes:explicit>" in channel
-        assert "<itunes:author>Author</itunes:author>" in channel
-        assert "<itunes:name>Author</itunes:name>" in channel
-        assert "<itunes:email>a@b.com</itunes:email>" in channel
-        assert "<itunes:subtitle>Sub</itunes:subtitle>" in channel
-        assert "<itunes:summary><![CDATA[Sum]]></itunes:summary>" in channel
-        assert 'text="Arts"' in channel
-        assert "<itunes:type>serial</itunes:type>" in channel
-        assert "<itunes:block>yes</itunes:block>" in channel
-        assert "<itunes:complete>yes</itunes:complete>" in channel
-        assert "<itunes:new-feed-url>https://new.example.com/feed.xml</itunes:new-feed-url>" in channel
+        assert channel.findtext("title") == "Title"
+        assert channel.findtext("link") == "https://example.com/show"
+        assert channel.findtext("description") == "Desc"
+        assert channel.findtext("language") == "fr"
+        assert channel.findtext("generator") == "podcastify"
+        assert channel.findtext(f"{IT}explicit") == "yes"
+        assert channel.findtext(f"{IT}author") == "Author"
+        assert channel.findtext(f"{IT}owner/{IT}name") == "Author"
+        assert channel.findtext(f"{IT}owner/{IT}email") == "a@b.com"
+        assert channel.findtext(f"{IT}subtitle") == "Sub"
+        assert channel.findtext(f"{IT}summary") == "Sum"
+        assert channel.find(f"{IT}category").get("text") == "Arts"
+        assert channel.findtext(f"{IT}type") == "serial"
+        assert channel.findtext(f"{IT}block") == "yes"
+        assert channel.findtext(f"{IT}complete") == "yes"
+        assert channel.findtext(f"{IT}new-feed-url") == "https://new.example.com/feed.xml"
 
-    def test_channel_no_optional_fields(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
-        gen = RSSGenerator()
-        channel = gen._build_channel_metadata(
-            "myshow",
-            {"title": "Title", "description": "", "author-name": "", "explicit": False},
-            "Mon, 01 Jan 2024 00:00:00 +0000",
-        )
-        assert "<title>Title</title>" in channel
-        assert "<itunes:explicit>no</itunes:explicit>" in channel
-        assert "<itunes:subtitle>" not in channel
-        assert "<itunes:owner>" not in channel
+    def test_channel_defaults(self, pub_dir):
+        channel = _feed(_channel(title="", description=" ", language=None, explicit=None))
+        assert channel.findtext("title") == "myshow"
+        assert channel.findtext("link") == "http://localhost:8080"
+        assert channel.find("description").text is None
+        assert channel.findtext("language") == "en"
+        assert channel.findtext(f"{IT}explicit") == "no"
+        assert channel.find(f"{IT}author").text is None
+        assert channel.find(f"{IT}summary").text is None
+        for tag in ("subtitle", "owner", "image", "category", "type", "block", "complete", "new-feed-url"):
+            assert channel.find(f"{IT}{tag}") is None
 
-    def test_episode_item(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
-        monkeypatch.setattr("podcastify.config.Config.BASE_URL", "http://localhost:8080")
-        pub_dir = tmp_path / "myshow"
-        pub_dir.mkdir()
-        (pub_dir / "ep01.mp3").write_bytes(b"\x00" * 64)
-        gen = RSSGenerator()
-        item = gen._build_episode_item(
-            "myshow",
-            {
-                "file": "ep01.mp3",
-                "title": "Episode 1",
-                "description": "Desc",
-                "__published": PUBLISHED,
-                "explicit": True,
-                "season": 1,
-                "episode": 2,
-                "episode_type": "full",
-                "guid": "custom-guid",
-                "__resolved_path": pub_dir / "ep01.mp3",
-            },
-            {"author-name": "Author", "explicit": False},
-        )
-        assert "<title>Episode 1</title>" in item
-        assert "<description><![CDATA[Desc]]></description>" in item
-        assert '<guid isPermaLink="false">custom-guid</guid>' in item
-        assert 'url="http://localhost:8080/myshow/ep01.mp3"' in item
-        assert "<itunes:explicit>yes</itunes:explicit>" in item
-        assert "<itunes:author>Author</itunes:author>" in item
-        assert "<itunes:season>1</itunes:season>" in item
-        assert "<itunes:episode>2</itunes:episode>" in item
-        assert "<itunes:episodeType>full</itunes:episodeType>" in item
-        assert "<pubDate>Mon, 01 Jan 2024 00:00:00 +0000</pubDate>" in item
+    def test_owner_with_email_only(self, pub_dir):
+        owner = _feed(_channel(**{"author-email": "a@b.com"})).find(f"{IT}owner")
+        assert owner.find(f"{IT}name") is None
+        assert owner.findtext(f"{IT}email") == "a@b.com"
 
-    def test_episode_defaults(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
-        monkeypatch.setattr("podcastify.config.Config.BASE_URL", "http://localhost:8080")
-        pub_dir = tmp_path / "myshow"
-        pub_dir.mkdir()
-        (pub_dir / "ep01.mp3").write_bytes(b"\x00" * 64)
-        gen = RSSGenerator()
-        item = gen._build_episode_item(
-            "myshow",
-            {"file": "ep01.mp3", "__resolved_path": pub_dir / "ep01.mp3", "__published": PUBLISHED},
-            {"author-name": "Author", "explicit": False},
-        )
-        assert "<title>ep01</title>" in item  # stem of filename
-        assert '<guid isPermaLink="false">' in item
-        assert "<itunes:explicit>no</itunes:explicit>" in item
-        # No season/episode/type if not present
-        assert "<itunes:season>" not in item
-        assert "<itunes:episode>" not in item
-        assert "<itunes:episodeType>" not in item
+    def test_episode_item(self, mp3):
+        item = _feed(
+            _channel(**{"author-name": "Author"}),
+            [
+                _episode(
+                    mp3,
+                    title="Episode 1",
+                    description="Desc",
+                    explicit=True,
+                    season=1,
+                    episode=2,
+                    episode_type="full",
+                    guid="custom-guid",
+                    subtitle="Sub",
+                )
+            ],
+        ).find("item")
+        assert item.findtext("title") == "Episode 1"
+        assert item.findtext("description") == "Desc"
+        assert item.findtext("guid") == "custom-guid"
+        assert item.find("guid").get("isPermaLink") == "false"
+        enclosure = item.find("enclosure")
+        assert enclosure.get("url") == "http://localhost:8080/myshow/ep01.mp3"
+        assert enclosure.get("length") == "64"
+        assert enclosure.get("type") == "audio/mpeg"
+        assert item.findtext(f"{IT}explicit") == "yes"
+        assert item.findtext(f"{IT}author") == "Author"
+        assert item.findtext(f"{IT}subtitle") == "Sub"
+        assert item.findtext(f"{IT}summary") == "Desc"
+        assert item.findtext(f"{IT}season") == "1"
+        assert item.findtext(f"{IT}episode") == "2"
+        assert item.findtext(f"{IT}episodeType") == "full"
+        assert item.findtext("pubDate") == "Mon, 01 Jan 2024 00:00:00 +0000"
+
+    def test_episode_defaults(self, mp3):
+        item = _feed(_channel(explicit=True, **{"author-name": "Author"}), [_episode(mp3)]).find("item")
+        assert item.findtext("title") == "ep01"
+        assert len(item.findtext("guid")) == 40
+        assert item.find("description").text is None
+        assert item.findtext(f"{IT}explicit") == "yes"
+        assert item.findtext(f"{IT}author") == "Author"
+        assert item.findtext(f"{IT}duration") == "0:42"
+        for tag in ("subtitle", "image", "season", "episode", "episodeType"):
+            assert item.find(f"{IT}{tag}") is None
+
+    def test_episode_overrides_channel(self, mp3):
+        item = _feed(
+            _channel(explicit=True, **{"author-name": "Author"}),
+            [_episode(mp3, explicit=False, duration_hms="1:00", **{"author-name": "Guest"})],
+        ).find("item")
+        assert item.findtext(f"{IT}explicit") == "no"
+        assert item.findtext(f"{IT}author") == "Guest"
+        assert item.findtext(f"{IT}duration") == "1:00"
+
+    def test_unknown_episode_type_is_dropped(self, mp3):
+        item = _feed(_channel(), [_episode(mp3, episode_type="special")]).find("item")
+        assert item.find(f"{IT}episodeType") is None
+
+    def test_missing_file_has_zero_length_and_no_duration(self, pub_dir):
+        item = _feed(_channel(), [_episode(pub_dir / "gone.mp3")]).find("item")
+        assert item.find("enclosure").get("length") == "0"
+        assert item.find(f"{IT}duration") is None
+
+    def test_episode_image(self, mp3):
+        (mp3.parent / "art.png").write_bytes(b"\x00")
+        item = _feed(_channel(), [_episode(mp3, image="art.png")]).find("item")
+        assert item.find(f"{IT}image").get("href") == "http://localhost:8080/myshow/art.png"
 
 
 class TestEnclosureType:
@@ -196,112 +228,73 @@ class TestEnclosureType:
             ("ep.opus", "audio/opus"),
         ],
     )
-    def test_enclosure_type_follows_extension(self, tmp_path, monkeypatch, name, expected):
-        monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
-        pub_dir = tmp_path / "myshow"
-        pub_dir.mkdir()
-        (pub_dir / name).write_bytes(b"\x00" * 64)
-        item = RSSGenerator()._build_episode_item(
-            "myshow",
-            {"file": name, "__resolved_path": pub_dir / name, "__published": PUBLISHED},
-            {"author-name": "Author"},
-        )
-        assert f'type="{expected}"/>' in item
+    def test_enclosure_type_follows_extension(self, pub_dir, name, expected):
+        path = pub_dir / name
+        path.write_bytes(b"\x00" * 64)
+        item = _feed(_channel(), [_episode(path)]).find("item")
+        assert item.find("enclosure").get("type") == expected
 
 
 class TestMediaUrls:
-    def test_enclosure_url_encoded_and_escaped_once(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
-        monkeypatch.setenv("PUBLIC_BASE_URL", "https://example.com/feeds/")
-        pub_dir = tmp_path / "myshow"
-        pub_dir.mkdir()
-        (pub_dir / "Q&A #1?.mp3").write_bytes(b"\x00" * 64)
-        item = RSSGenerator()._build_episode_item(
-            "myshow",
-            {
-                "file": "Q&A #1?.mp3",
-                "title": "T",
-                "guid": "g",
-                "__resolved_path": pub_dir / "Q&A #1?.mp3",
-                "__published": PUBLISHED,
-            },
-            {"author-name": "Author"},
-        )
-        assert 'url="https://example.com/feeds/myshow/Q%26A%20%231%3F.mp3"' in item
-        assert "&amp;" not in item
+    def test_enclosure_url_encoded_and_escaped_once(self, pub_dir, monkeypatch):
+        monkeypatch.setattr("podcastify.config.Config.BASE_URL", "https://example.com/feeds")
+        path = pub_dir / "Q&A #1?.mp3"
+        path.write_bytes(b"\x00" * 64)
+        xml = _xml(_channel(), [_episode(path, title="T", guid="g")])
+        assert 'url="https://example.com/feeds/myshow/Q%26A%20%231%3F.mp3"' in xml
+        assert "&amp;" not in xml
 
-    def test_image_href_encoded(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
-        monkeypatch.setattr("podcastify.config.Config.BASE_URL", "http://localhost:8080")
-        pub_dir = tmp_path / "myshow"
-        pub_dir.mkdir()
+    def test_image_href_encoded(self, pub_dir):
         (pub_dir / "Café & co.jpg").write_bytes(b"\x00" * 64)
-        channel = RSSGenerator()._build_channel_metadata(
-            "myshow",
-            {"title": "T", "image": "Café & co.jpg"},
-            "Mon, 01 Jan 2024 00:00:00 +0000",
-        )
-        assert '<itunes:image href="http://localhost:8080/myshow/Caf%C3%A9%20%26%20co.jpg"/>' in channel
+        channel = _feed(_channel(image="Café & co.jpg"))
+        assert channel.find(f"{IT}image").get("href") == "http://localhost:8080/myshow/Caf%C3%A9%20%26%20co.jpg"
 
 
 class TestFeedWellFormed:
     HOSTILE = 'Tom & "Jerry" <b>bold</b> it\'s ]]> café 日本語 🎙️\x01\x0b￾ end'
     CLEAN = 'Tom & "Jerry" <b>bold</b> it\'s ]]> café 日本語 🎙️ end'
-    ITUNES = "{http://www.itunes.com/dtds/podcast-1.0.dtd}"
 
-    def test_cdata_end_sequence_is_split(self):
-        channel = RSSGenerator()._build_channel_metadata(
-            "myshow",
-            {"title": "T", "description": "a]]>b"},
-            "Mon, 01 Jan 2024 00:00:00 +0000",
-        )
-        assert "<description><![CDATA[a]]]]><![CDATA[>b]]></description>" in channel
+    def test_cdata_end_sequence_round_trips(self, pub_dir):
+        xml = _xml(_channel(description="a]]>b"))
+        assert "<description>a]]&gt;b</description>" in xml
+        assert ET.fromstring(xml.encode("utf-8")).findtext("./channel/description") == "a]]>b"
 
-    def test_hostile_text_produces_parseable_feed(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
-        pub_dir = tmp_path / "myshow"
-        pub_dir.mkdir()
-        (pub_dir / "ep01.mp3").write_bytes(b"\x00" * 64)
-        xml = RSSGenerator().generate_feed_xml(
-            "myshow",
-            {
-                "title": self.HOSTILE,
-                "description": self.HOSTILE,
-                "summary": self.HOSTILE,
-                "subtitle": self.HOSTILE,
-                "author-name": self.HOSTILE,
-                "author-email": self.HOSTILE,
-                "categories": [[self.HOSTILE, self.HOSTILE]],
-            },
+    def test_hostile_text_produces_parseable_feed(self, mp3):
+        hostile = self.HOSTILE
+        channel = _feed(
+            _channel(
+                title=hostile,
+                description=hostile,
+                summary=hostile,
+                subtitle=hostile,
+                categories=[[hostile, hostile]],
+                **{"author-name": hostile, "author-email": hostile},
+            ),
             [
-                {
-                    "file": "ep01.mp3",
-                    "title": self.HOSTILE,
-                    "description": self.HOSTILE,
-                    "summary": self.HOSTILE,
-                    "subtitle": self.HOSTILE,
-                    "guid": self.HOSTILE,
-                    "duration_hms": self.HOSTILE,
-                    "__resolved_path": pub_dir / "ep01.mp3",
-                    "__published": PUBLISHED,
-                }
+                _episode(
+                    mp3,
+                    title=hostile,
+                    description=hostile,
+                    summary=hostile,
+                    subtitle=hostile,
+                    guid=hostile,
+                    duration_hms=hostile,
+                )
             ],
         )
-        channel = ET.fromstring(xml.encode("utf-8")).find("channel")
-        it = self.ITUNES
         for tag in (
             "title",
             "description",
-            f"{it}summary",
-            f"{it}subtitle",
-            f"{it}author",
-            f"{it}owner/{it}name",
-            f"{it}owner/{it}email",
+            f"{IT}summary",
+            f"{IT}subtitle",
+            f"{IT}author",
+            f"{IT}owner/{IT}name",
+            f"{IT}owner/{IT}email",
         ):
             assert channel.find(tag).text == self.CLEAN
-        category = channel.find(f"{it}category")
+        category = channel.find(f"{IT}category")
         assert category.get("text") == self.CLEAN
-        assert category.find(f"{it}category").get("text") == self.CLEAN
+        assert category.find(f"{IT}category").get("text") == self.CLEAN
         item = channel.find("item")
-        for tag in ("title", "description", "guid", f"{it}summary", f"{it}subtitle", f"{it}duration"):
+        for tag in ("title", "description", "guid", f"{IT}summary", f"{IT}subtitle", f"{IT}duration"):
             assert item.find(tag).text == self.CLEAN

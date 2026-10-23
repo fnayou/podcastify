@@ -48,25 +48,6 @@ class Config:
     RUN_ON_START = _EnvVar("RUN_ON_START", "true", _coerce_bool)
     LOG_LEVEL = _EnvVar("LOG_LEVEL", "INFO")
 
-    CHANNEL_FIELDS = [
-        "name",
-        "title",
-        "author-name",
-        "author-email",
-        "subtitle",
-        "summary",
-        "description",
-        "language",
-        "explicit",
-        "image",
-        "link",
-        "categories",
-        "type",
-        "block",
-        "complete",
-        "new_feed_url",
-    ]
-
     MEDIA_TYPES = {
         ".mp3": "audio/mpeg",
         ".m4a": "audio/x-m4a",

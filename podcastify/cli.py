@@ -5,13 +5,14 @@ import re
 import tempfile
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import List, Optional, Sequence, Tuple
 
 from podcastify.config import Config
 from podcastify.logging_config import configure_logging
 from podcastify.media import MediaProcessor
 from podcastify.parser import (
     ConfigurationManager,
+    Episode,
     EpisodeManager,
     validate_podcast_config,
 )
@@ -30,23 +31,6 @@ class PodcastProcessor:
         self.config_manager = ConfigurationManager()
         self.episode_manager = EpisodeManager()
         self.rss_generator = RSSGenerator()
-
-    def _build_metadata_from_model(self, model: Any) -> Dict[str, Any]:
-        """Build metadata dict from validated PodcastChannelModel."""
-        if not model:
-            return {}
-        meta = {}
-        for field in Config.CHANNEL_FIELDS:
-            field_alias = field
-            if field == "author-name":
-                value = getattr(model, "author_name", None)
-            elif field == "author-email":
-                value = getattr(model, "author_email", None)
-            else:
-                value = getattr(model, field, None)
-            if value is not None:
-                meta[field_alias] = value
-        return meta
 
     @classmethod
     def _unchanged(cls, out: Path, xml: str) -> bool:
@@ -72,16 +56,11 @@ class PodcastProcessor:
 
             logger.debug(f"Config parsed: {config_path}")
             validated, err = validate_podcast_config(cfg)
-            if err:
+            if err or validated is None:
                 logger.error(f"Config validation failed for {podcast_name}: {err}")
                 return False
 
-            meta = self._build_metadata_from_model(validated)
-            if not meta:
-                logger.error(f"Failed to build metadata for {podcast_name}")
-                return False
-
-            cfg_name = meta.get("name")
+            cfg_name = validated.name
             if cfg_name and cfg_name != podcast_name:
                 logger.warning(
                     f"Config name '{cfg_name}' differs from filename-derived "
@@ -95,27 +74,26 @@ class PodcastProcessor:
                 return False
 
             discovered = self.episode_manager.discover_episodes(podcast_name, validated)
-            episodes = []
-            for e in discovered:
-                if Path(e.get("__resolved_path", "")).exists():
-                    episodes.append(e)
+            episodes: List[Episode] = []
+            for episode in discovered:
+                if episode.path.exists():
+                    episodes.append(episode)
                 else:
-                    logger.warning(f"Skipping episode for {podcast_name}: file not found: {e.get('file', 'unknown')}")
+                    logger.warning(f"Skipping episode for {podcast_name}: file not found: {episode.model.file}")
             skipped = len(discovered) - len(episodes)
             if not episodes:
                 logger.warning(f"No episodes found for {podcast_name} in {pub_dir}")
                 return False
 
-            paths = [Path(e["__resolved_path"]) for e in episodes]
-            MediaProcessor.warm_durations_parallel(paths)
+            MediaProcessor.warm_durations_parallel([episode.path for episode in episodes])
 
-            episodes.sort(key=lambda ep: ep["__published"], reverse=True)
+            episodes.sort(key=lambda episode: episode.published, reverse=True)
 
             logger.debug(f"Episode count: {podcast_name} -> {len(episodes)} episodes")
             logger.debug(f"Sort order: {podcast_name} by pub_date desc")
 
             if Config.PUBLISH_XML and not self.dry_run:
-                xml = self.rss_generator.generate_feed_xml(podcast_name, meta, episodes)
+                xml = self.rss_generator.generate_feed_xml(podcast_name, validated, episodes)
                 out = Config.PUBLIC_ROOT / f"{podcast_name}.xml"
                 if self._unchanged(out, xml):
                     logger.info(f"Unchanged {podcast_name}: {len(episodes)} episodes, kept {out}")

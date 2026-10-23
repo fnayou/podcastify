@@ -1,6 +1,7 @@
 import email.utils as eut
 import logging
 import re
+from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -84,7 +85,7 @@ class PodcastChannelModel(BaseModel):
     subtitle: Optional[str] = None
     summary: Optional[str] = None
     description: str
-    language: Optional[str] = "en"
+    language: str = "en"
     explicit: Optional[bool] = False
     image: Optional[str] = None
     link: Optional[str] = None
@@ -116,6 +117,11 @@ class PodcastChannelModel(BaseModel):
                 guids[ep.guid] = index
         return self
 
+    @field_validator("language", mode="before")
+    @classmethod
+    def default_language(cls, v: Any) -> Any:
+        return v or "en"
+
     @field_validator("type")
     @classmethod
     def validate_type(cls, v: Optional[str]) -> Optional[str]:
@@ -137,6 +143,13 @@ class PodcastFileModel(BaseModel):
         if isinstance(data.get("podcast"), dict):
             return data
         return {"podcast": data}
+
+
+@dataclass(frozen=True)
+class Episode:
+    model: EpisodeModel
+    path: Path
+    published: datetime
 
 
 def validate_podcast_config(raw: Dict[str, Any]) -> Tuple[Optional[PodcastChannelModel], Optional[str]]:
@@ -198,45 +211,29 @@ class EpisodeManager:
     def discover_episodes(
         podcast_name: str,
         validated: Optional[PodcastChannelModel] = None,
-    ) -> List[Dict[str, Any]]:
+    ) -> List[Episode]:
         pub_dir = Config.PUBLIC_ROOT / podcast_name
-        eps = [ep.model_dump(by_alias=True) for ep in validated.episodes or []] if validated else []
-        if eps:
-            discovered: List[Dict[str, Any]] = []
-            for e in eps:
-                fname = Path(e.get("file", "")).name
-                ep = dict(e)
-                ep["__resolved_path"] = pub_dir / fname
-                ep["__published"] = EpisodeManager._published(ep)
-                discovered.append(ep)
-            return discovered
+        if validated and validated.episodes:
+            return [EpisodeManager._episode(ep, pub_dir / Path(ep.file).name) for ep in validated.episodes]
 
         if not pub_dir.exists():
             return []
 
-        discovered = []
-        for media in sorted(pub_dir.iterdir()):
-            if media.suffix.lower() not in Config.MEDIA_TYPES or not media.is_file():
-                continue
-            ep = {
-                "file": media.name,
-                "title": media.stem,
-                "__resolved_path": media,
-            }
-            ep["__published"] = EpisodeManager._published(ep)
-            discovered.append(ep)
-        return discovered
+        return [
+            EpisodeManager._episode(EpisodeModel(file=media.name), media)
+            for media in sorted(pub_dir.iterdir())
+            if media.suffix.lower() in Config.MEDIA_TYPES and media.is_file()
+        ]
 
     @staticmethod
-    def _published(episode: Dict[str, Any]) -> datetime:
-        pub_date = episode.get("pub_date")
-        if isinstance(pub_date, datetime):
-            return pub_date
+    def _episode(model: EpisodeModel, path: Path) -> Episode:
+        if model.pub_date is not None:
+            return Episode(model, path, model.pub_date)
         try:
-            mtime = Path(episode["__resolved_path"]).stat().st_mtime
+            mtime = path.stat().st_mtime
         except OSError:
             mtime = 0.0
-        return datetime.fromtimestamp(mtime, tz=timezone.utc)
+        return Episode(model, path, datetime.fromtimestamp(mtime, tz=timezone.utc))
 
     @staticmethod
     def media_type(path: Path) -> str:
@@ -247,11 +244,10 @@ class EpisodeManager:
         return f"{Config.BASE_URL}/{quote(podcast_name, safe='')}/{quote(file_name, safe='')}"
 
     @staticmethod
-    def resolve_image_url(podcast_name: str, meta: Dict[str, Any]) -> Optional[str]:
-        img = meta.get("image")
+    def resolve_image_url(podcast_name: str, img: Optional[str]) -> Optional[str]:
         if not img:
             return None
-        if isinstance(img, str) and img.startswith(("http://", "https://")):
+        if img.startswith(("http://", "https://")):
             return img
         img_path = Config.PUBLIC_ROOT / podcast_name / Path(img).name
         if img_path.exists():

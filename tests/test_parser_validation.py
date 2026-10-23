@@ -155,6 +155,12 @@ class TestValidatePodcastConfig:
         _, err = validate_podcast_config(cfg)
         assert err is not None
 
+    @pytest.mark.parametrize("raw", [None, ""])
+    def test_empty_language_defaults_to_en(self, raw):
+        model, err = validate_podcast_config({"title": "T", "description": "D", "language": raw})
+        assert err is None
+        assert model.language == "en"
+
     def test_legacy_author_field(self, sample_legacy_config):
         cfg = {**sample_legacy_config, "description": "Legacy desc"}
         model, err = validate_podcast_config(cfg)
