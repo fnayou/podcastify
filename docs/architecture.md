@@ -43,7 +43,7 @@ Note: 6 logical classes in 5 modules; `ConfigurationManager` + `EpisodeManager` 
 
 ### Config Discovery
 
-Scans `./podcasts/` for files matching `<name>-podcast.yaml`. The `<name>` prefix becomes the podcast identifier.
+Scans `./podcasts/` for files matching `<name>-podcast.yaml`. The `<name>` prefix (also accepted as `<name>-podcast.yml`) becomes the podcast identifier. It must start with a letter or digit and contain only letters, digits, `.`, `_` and `-`, with no `..`. A config with another name is skipped with a warning. If two configs map to one name, the first in sorted order wins and the other is skipped with an error naming both files.
 
 ### Episode Discovery
 
