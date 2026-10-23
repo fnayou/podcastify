@@ -31,6 +31,14 @@ tasks:
       - task: test:coverage
       - task docker:build:quick
 
+  hooks:
+    desc: Install git hooks (Conventional Commits check on commit-msg)
+    cmds:
+      - |
+        PY=python3
+        [ -x .venv/bin/python ] && PY=.venv/bin/python
+        $PY -m pre_commit install
+
   smoke:
     desc: Build and test container with smoke test (curl checks)
     cmds:
