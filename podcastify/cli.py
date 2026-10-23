@@ -79,18 +79,23 @@ class PodcastProcessor:
                 logger.info("Create directory and place MP3 files there")
                 return False
 
-            episodes = self.episode_manager.discover_episodes(
+            discovered = self.episode_manager.discover_episodes(
                 podcast_name, cfg, validated
             )
+            episodes = []
+            for e in discovered:
+                if Path(e.get("__resolved_path", "")).exists():
+                    episodes.append(e)
+                else:
+                    logger.warning(
+                        f"Skipping episode for {podcast_name}: file not found: {e.get('file', 'unknown')}"
+                    )
+            skipped = len(discovered) - len(episodes)
             if not episodes:
                 logger.warning(f"No episodes found for {podcast_name} in {pub_dir}")
                 return False
 
-            paths = [
-                Path(e["__resolved_path"])
-                for e in episodes
-                if Path(e.get("__resolved_path", "")).exists()
-            ]
+            paths = [Path(e["__resolved_path"]) for e in episodes]
             MediaProcessor.warm_durations_parallel(paths)
 
             def _ep_ts(ep: Dict[str, Any]) -> float:
@@ -118,14 +123,6 @@ class PodcastProcessor:
             logger.debug(f"Episode count: {podcast_name} -> {len(episodes)} episodes")
             logger.debug(f"Sort order: {podcast_name} by pub_date desc")
 
-            missing = [
-                e.get("file", "unknown")
-                for e in episodes
-                if not Path(e.get("__resolved_path")).exists()
-            ]
-            if missing:
-                logger.warning(f"Missing episode files for {podcast_name}: {', '.join(missing)}")
-
             if Config.PUBLISH_XML:
                 xml = self.rss_generator.generate_feed_xml(podcast_name, meta, episodes)
                 out = Config.PUBLIC_ROOT / f"{podcast_name}.xml"
@@ -141,7 +138,8 @@ class PodcastProcessor:
                 except Exception:
                     os.unlink(tmp)
                     raise
-                logger.info(f"Published {podcast_name}: {len(episodes)} episodes -> {out}")
+                skipped_note = f" ({skipped} skipped)" if skipped else ""
+                logger.info(f"Published {podcast_name}: {len(episodes)} episodes{skipped_note} -> {out}")
             else:
                 logger.info(
                     f"Validated {podcast_name}: {len(episodes)} episodes "

@@ -174,6 +174,66 @@ class TestProcessPodcast:
         assert any("Validated" in record.message for record in caplog.records)
 
 
+class TestMissingEpisodeFiles:
+    def _write_config(self, tmp_path, episodes):
+        cfg = tmp_path / "myshow-podcast.yaml"
+        data = {"title": "My Show", "author-name": "Author", "description": "Desc"}
+        if episodes is not None:
+            data["episodes"] = episodes
+        cfg.write_text(yaml.safe_dump(data), encoding="utf-8")
+        return cfg
+
+    def test_skips_missing_episode_file(self, tmp_path, monkeypatch, caplog):
+        monkeypatch.setattr("podcastify.config.Config.PODCASTS_ROOT", tmp_path)
+        monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
+        monkeypatch.setattr("podcastify.config.Config.PUBLISH_XML", True)
+        cfg = self._write_config(tmp_path, [{"file": "ep01.mp3"}, {"file": "ep02.mp3"}])
+        pub = tmp_path / "myshow"
+        pub.mkdir()
+        (pub / "ep01.mp3").write_bytes(b"\x00" * 64)
+        ok = PodcastProcessor().process_podcast("myshow", cfg)
+        assert ok is True
+        xml = (tmp_path / "myshow.xml").read_text(encoding="utf-8")
+        assert xml.count("<item>") == 1
+        assert "ep01.mp3" in xml
+        assert "ep02.mp3" not in xml
+        warnings = [r for r in caplog.records if r.levelname == "WARNING"]
+        assert len(warnings) == 1
+        assert "myshow" in warnings[0].message
+        assert "ep02.mp3" in warnings[0].message
+        assert any(
+            "Published myshow: 1 episodes" in r.message and "1 skipped" in r.message
+            for r in caplog.records
+        )
+
+    def test_all_episode_files_missing(self, tmp_path, monkeypatch, caplog):
+        monkeypatch.setattr("podcastify.config.Config.PODCASTS_ROOT", tmp_path)
+        monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
+        monkeypatch.setattr("podcastify.config.Config.PUBLISH_XML", True)
+        cfg = self._write_config(tmp_path, [{"file": "ep01.mp3"}, {"file": "ep02.mp3"}])
+        (tmp_path / "myshow").mkdir()
+        ok = PodcastProcessor().process_podcast("myshow", cfg)
+        assert ok is False
+        assert not (tmp_path / "myshow.xml").exists()
+        assert any("No episodes found for myshow" in r.message for r in caplog.records)
+
+    def test_auto_discovered_episodes_unaffected(self, tmp_path, monkeypatch, caplog):
+        monkeypatch.setattr("podcastify.config.Config.PODCASTS_ROOT", tmp_path)
+        monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
+        monkeypatch.setattr("podcastify.config.Config.PUBLISH_XML", True)
+        cfg = self._write_config(tmp_path, None)
+        pub = tmp_path / "myshow"
+        pub.mkdir()
+        (pub / "ep01.mp3").write_bytes(b"\x00" * 64)
+        (pub / "ep02.mp3").write_bytes(b"\x00" * 64)
+        ok = PodcastProcessor().process_podcast("myshow", cfg)
+        assert ok is True
+        xml = (tmp_path / "myshow.xml").read_text(encoding="utf-8")
+        assert xml.count("<item>") == 2
+        assert not any(r.levelname == "WARNING" for r in caplog.records)
+        assert not any("skipped" in r.message for r in caplog.records)
+
+
 class TestProcessAllPodcasts:
     def test_empty(self, tmp_path, monkeypatch, caplog):
         monkeypatch.setattr("podcastify.config.Config.PODCASTS_ROOT", tmp_path)
