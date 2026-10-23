@@ -481,3 +481,126 @@ class TestCacheRobustness:
         MediaProcessor._unpersisted.add(("x", 1.0))
         MediaProcessor.clear_cache()
         assert MediaProcessor._unpersisted == set()
+
+    @pytest.mark.parametrize("content", ['["a"]', '"text"', "42"])
+    def test_non_dict_cache_is_ignored(self, cache_file, content):
+        cache_file.write_text(content, encoding="utf-8")
+        MediaProcessor._load_disk_cache()
+        assert MediaProcessor._duration_cache == {}
+
+    def test_malformed_keys_are_skipped_and_good_keys_kept(self, cache_file):
+        cache_file.write_text(
+            json.dumps({"no-separator": 1.0, "/a.mp3|not-a-float": 2.0, "/b.mp3|5.5": 3.0}),
+            encoding="utf-8",
+        )
+        MediaProcessor._load_disk_cache()
+        assert MediaProcessor._duration_cache == {("/b.mp3", 5.5): 3.0}
+
+    def test_corrupt_cache_warns_with_reason(self, cache_file, caplog):
+        cache_file.write_text("{not json", encoding="utf-8")
+        MediaProcessor._load_disk_cache()
+        warnings = [r.message for r in caplog.records if r.levelname == "WARNING"]
+        assert len(warnings) == 1
+        assert warnings[0].startswith("Failed to load duration cache: ")
+        assert MediaProcessor._duration_cache == {}
+
+    def test_corrupt_legacy_cache_warns_and_is_kept(self, tmp_path, monkeypatch, cache_file, caplog):
+        public_root = tmp_path / "public"
+        public_root.mkdir()
+        monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", public_root)
+        legacy = public_root / ".podcastify-cache.json"
+        legacy.write_text("{not json", encoding="utf-8")
+        MediaProcessor._load_disk_cache()
+        warnings = [r.message for r in caplog.records if r.levelname == "WARNING"]
+        assert warnings[0].startswith("Failed to migrate legacy cache: ")
+        assert legacy.exists()
+        assert not cache_file.exists()
+
+    def test_non_dict_legacy_cache_is_not_migrated(self, tmp_path, monkeypatch, cache_file):
+        public_root = tmp_path / "public"
+        public_root.mkdir()
+        monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", public_root)
+        legacy = public_root / ".podcastify-cache.json"
+        legacy.write_text("[1, 2]", encoding="utf-8")
+        MediaProcessor._load_disk_cache()
+        assert legacy.exists()
+        assert not cache_file.exists()
+
+    def test_clear_cache_removes_the_cache_file(self, cache_file):
+        cache_file.write_text("{}", encoding="utf-8")
+        MediaProcessor.clear_cache()
+        assert not cache_file.exists()
+
+    def test_unwritable_cache_warns_with_reason(self, mocker, mock_mp3, cache_file, caplog):
+        MediaProcessor._duration_cache[(str(mock_mp3), 1.0)] = 2.0
+        mocker.patch("pathlib.Path.write_text", side_effect=OSError("disk full"))
+        MediaProcessor._save_disk_cache()
+        warnings = [r.message for r in caplog.records if r.levelname == "WARNING"]
+        assert warnings == ["Failed to save duration cache: disk full"]
+
+
+class TestStatFailures:
+    def test_stat_failure_after_exists_returns_none(self, mocker):
+        fake = mocker.Mock(spec=Path)
+        fake.exists.return_value = True
+        fake.stat.side_effect = OSError("gone")
+        assert MediaProcessor.get_duration_seconds(fake) is None
+
+    def test_size_check_failure_is_logged_and_cached(self, mocker, caplog):
+        fake = mocker.Mock(spec=Path)
+        fake.name = "a.mp3"
+        fake.exists.return_value = True
+        fake.stat.side_effect = [mocker.Mock(st_mtime=1.0), OSError("gone")]
+        assert MediaProcessor.get_duration_seconds(fake, persist=False) is None
+        warnings = [r.message for r in caplog.records if r.levelname == "WARNING"]
+        assert warnings == ["Failed to get duration for a.mp3: <size check failed>"]
+        assert MediaProcessor._duration_cache[(str(fake), 1.0)] is None
+
+    def test_stream_fallback_timeout_reason_is_logged(self, mocker, mock_mp3, caplog):
+        mocker.patch(
+            "podcastify.media.subprocess.run",
+            side_effect=[
+                mocker.Mock(stdout="\n", stderr=""),
+                subprocess.TimeoutExpired(cmd="ffprobe", timeout=10),
+            ],
+        )
+        assert MediaProcessor.get_duration_seconds(mock_mp3, persist=False) is None
+        warnings = [r.message for r in caplog.records if r.levelname == "WARNING"]
+        assert warnings == [
+            "Failed to get duration for dummy.mp3: <no duration data> (Command 'ffprobe' timed out after 10 seconds)"
+        ]
+
+
+class TestWarmDurationsParallel:
+    @pytest.fixture
+    def run(self, mocker):
+        return mocker.patch(
+            "podcastify.media.subprocess.run",
+            return_value=mocker.Mock(stdout="60.0\n", stderr=""),
+        )
+
+    def test_skips_missing_files(self, tmp_path, run):
+        MediaProcessor.warm_durations_parallel([tmp_path / "missing.mp3"])
+        run.assert_not_called()
+
+    def test_skips_files_whose_stat_fails(self, mocker, run):
+        fake = mocker.Mock(spec=Path)
+        fake.exists.return_value = True
+        fake.stat.side_effect = OSError("gone")
+        MediaProcessor.warm_durations_parallel([fake])
+        run.assert_not_called()
+
+    def test_skips_files_already_cached(self, mock_mp3, run):
+        MediaProcessor._duration_cache[(str(mock_mp3), mock_mp3.stat().st_mtime)] = 12.0
+        MediaProcessor.warm_durations_parallel([mock_mp3])
+        run.assert_not_called()
+
+    def test_probes_uncached_files_once_each(self, tmp_path, run):
+        paths = []
+        for n in range(3):
+            p = tmp_path / f"ep{n}.mp3"
+            p.write_bytes(b"\x00" * 64)
+            paths.append(p)
+        MediaProcessor.warm_durations_parallel(paths)
+        assert run.call_count == 3
+        assert all(MediaProcessor._duration_cache[(str(p), p.stat().st_mtime)] == 60.0 for p in paths)
