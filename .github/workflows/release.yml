@@ -16,13 +16,32 @@ env:
   IMAGE_NAME: fnayou/podcastify
 
 jobs:
+  validate-tag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Validate CalVer tag
+        shell: bash
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          PATTERN='^v20[0-9]{2}\.([1-9]|1[0-2])\.(0|[1-9][0-9]*)(-[0-9A-Za-z.]+)?$'
+          if [[ ! "${TAG}" =~ ${PATTERN} ]]; then
+            echo "::error::Tag '${TAG}' is not a CalVer release tag. Expected vYYYY.M.PATCH (month without zero padding), optionally followed by -rc.N, for example v2026.10.0 or v2026.10.0-rc.1."
+            exit 1
+          fi
+
   test:
+    needs: [validate-tag]
     uses: ./.github/workflows/test.yml
 
   docker:
     needs: [test]
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      digest: ${{ steps.build-push.outputs.digest }}
     permissions:
       contents: read
       id-token: write
@@ -60,10 +79,10 @@ jobs:
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
         with:
           images: ${{ env.IMAGE_NAME }}
+          flavor: |
+            latest=false
           tags: |
-            type=ref,event=tag
             type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
           labels: |
             org.opencontainers.image.title=podcastify
@@ -124,18 +143,19 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           sbom: true
-          provenance: true
+          provenance: false
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Generate artifact attestation
-        uses: actions/attest-build-provenance@ef244123eb79f2f7a7e75d99086184180e6d0018 # v1.4.4
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.build-push.outputs.digest }}
           push-to-registry: true
+          create-storage-record: false
 
   release:
     runs-on: ubuntu-latest
@@ -177,7 +197,17 @@ jobs:
           body: |
             ## Docker Image
             ```
-            docker pull ${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+            docker pull ${{ env.IMAGE_NAME }}:${{ needs.docker.outputs.version }}
+            ```
+
+            Immutable reference:
+            ```
+            docker pull ${{ env.IMAGE_NAME }}@${{ needs.docker.outputs.digest }}
+            ```
+
+            Verify the signed provenance:
+            ```
+            gh attestation verify oci://${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.docker.outputs.version }} --repo ${{ github.repository }}
             ```
 
             ## Release Notes
