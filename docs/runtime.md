@@ -16,9 +16,10 @@ The base image `python:3.12-alpine3.22` pins the Alpine and Python versions. Cad
 ### Security
 
 - Pull requests build the image without pushing it, then smoke test it.
-- Images are pushed to Docker Hub only on tagged releases (`v*.*.*`).
+- Images are pushed to Docker Hub only on tagged releases. The release workflow rejects a tag that is not CalVer (`vYYYY.M.PATCH`, month without zero padding, optional `-rc.N`).
+- A release pushes the image as `YYYY.M.PATCH` (the tag without the `v`), plus `latest` for a stable tag. A prerelease tag pushes only its exact version and does not move `latest`. There is no `v`-prefixed and no `major.minor` tag.
 - A release builds the amd64 image locally without pushing, scans it with Trivy (CRITICAL and HIGH findings with a fix fail the job), and only then pushes the multi-arch image. A failed scan publishes nothing.
-- SBOM and provenance attestations are attached to each release.
+- An SBOM is attached to each release image, and one signed provenance attestation is published for its digest (BuildKit's own provenance is off). Check it with `gh attestation verify oci://docker.io/fnayou/podcastify:YYYY.M.PATCH --repo fnayou/podcastify`.
 
 ## Process Management
 
