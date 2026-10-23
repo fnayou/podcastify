@@ -140,11 +140,15 @@ The root filesystem is read-only. `public/`, `podcasts/` and `cache/` stay writa
 
 ## Caddyfile
 
-Shipped Caddyfile uses `{$SERVICE_PORT}` and hides dotfiles:
+Shipped Caddyfile uses `{$SERVICE_PORT}`, serves a fixed `/healthz` response for the container healthcheck, does not list directories, and hides dotfiles:
 
 ```caddy
 :{$SERVICE_PORT} {
   root * /app/public
+
+  @health path /healthz
+  respond @health "ok" 200
+  log_skip @health
   encode gzip
   header Access-Control-Allow-Origin "*"
 
@@ -160,7 +164,6 @@ Shipped Caddyfile uses `{$SERVICE_PORT}` and hides dotfiles:
   header @images Cache-Control "public, max-age=86400"
 
   file_server {
-    browse
     hide .*
   }
 

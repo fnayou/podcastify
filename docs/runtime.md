@@ -53,10 +53,10 @@ read-only root filesystem.
 
 ## Healthcheck
 
-A simple wget-based healthcheck is configured in the Dockerfile:
+A wget-based healthcheck is configured in the Dockerfile. It requests `/healthz`, a fixed `200 ok` response that Caddy does not access-log, and allows a 120 second start period for the first generation on a large library:
 
 ```dockerfile
-HEALTHCHECK CMD wget -q -O- http://localhost:${SERVICE_PORT}/ || exit 1
+HEALTHCHECK --interval=30s --timeout=3s --start-period=120s CMD wget -q --spider http://127.0.0.1:${SERVICE_PORT}/healthz || exit 1
 ```
 
 This verifies that Caddy is responding on the configured port.
