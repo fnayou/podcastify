@@ -1,0 +1,58 @@
+name: Scan
+on:
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scan
+  cancel-in-progress: false
+
+env:
+  IMAGE_REF: docker.io/fnayou/podcastify:latest
+
+jobs:
+  latest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Pull published image
+        run: docker pull "$IMAGE_REF"
+
+      - name: Trivy scan (fail on CRITICAL and HIGH)
+        id: trivy
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE_REF }}
+          format: "json"
+          output: "trivy-results.json"
+          vuln-type: "os,library"
+          severity: "CRITICAL,HIGH"
+          ignore-unfixed: true
+          exit-code: "1"
+          hide-progress: true
+
+      - name: Trivy report (table and SARIF from the same scan)
+        if: ${{ !cancelled() && hashFiles('trivy-results.json') != '' }}
+        shell: bash
+        run: |
+          trivy convert --format table --output trivy-results.txt trivy-results.json
+          cat trivy-results.txt
+          { echo '```'; cat trivy-results.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          trivy convert --format sarif --output trivy-results.sarif trivy-results.json
+
+      - name: Upload SARIF (Trivy)
+        if: ${{ !cancelled() && hashFiles('trivy-results.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@4bfa242aa49c5f7c6770b98670d354a7dfac05f8 # v3.39.1
+        with:
+          sarif_file: "trivy-results.sarif"
+          category: trivy-latest
