@@ -63,7 +63,7 @@ PGID=1000
 | `PUBLIC_BASE_URL` | `http://localhost:8080` | Base URL used in generated enclosure and image links. |
 | `PUID` | `1000` | uid the container drops to when started as root. Match the owner of the bind-mounts. |
 | `PGID` | `1000` | gid the container drops to when started as root. |
-| `RUN_ON_START` | `true` | Run generator on container startup. The entrypoint tests the literal `true`. |
+| `RUN_ON_START` | `true` | Run generator on container startup. Accepts `true/yes/1/on`, case-insensitive; any other value skips it. |
 | `PUBLISH_XML` | `true` | Write XML files to disk. Accepts `true/yes/1/on` and `false/no/0/off`; other values warn and count as false. |
 | `LOG_LEVEL` | `INFO` | Logging verbosity: `DEBUG`, `INFO`, `WARNING`, or `ERROR`. |
 
@@ -75,7 +75,7 @@ The podcastify generator logs at different levels. The visibility depends on how
 
 | How generator runs | In `docker compose logs -f`? | Why |
 |---|---|---|
-| Boot, `RUN_ON_START=true` | YES | `entrypoint.sh` runs the generator before `exec`-ing `tini`; stdout is inherited by the container |
+| Boot, `RUN_ON_START=true` | YES | `entrypoint.sh` runs the generator under `tini` (PID 1) before `exec`-ing Caddy; stdout is inherited by the container |
 | Caddy | YES | Caddy runs in the foreground under `tini` and logs to stdout |
 | `docker compose exec podcastify python /app/app.py generate` | NO | separate process attached to the exec client's terminal, not PID 1 — prints in your shell |
 | `docker compose run --rm ...` | NO | separate temporary container, its own log stream |
