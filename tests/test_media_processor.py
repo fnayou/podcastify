@@ -155,7 +155,7 @@ class TestGetDurationSeconds:
         legacy_cache.write_text('{"path|123.45": 567.89}', encoding="utf-8")
 
         MediaProcessor.clear_cache()
-        proc_mock = mocker.patch(
+        mocker.patch(
             "podcastify.media.subprocess.run",
             return_value=mocker.Mock(stdout="100.0\n", stderr=""),
         )

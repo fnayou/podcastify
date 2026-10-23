@@ -4,9 +4,7 @@
 from pathlib import Path
 
 import pytest
-import yaml
 
-from podcastify.config import Config
 from podcastify.parser import ConfigurationManager
 
 
