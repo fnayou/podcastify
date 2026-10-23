@@ -17,6 +17,9 @@ venv/
 .idea/
 .vscode/
 
+# Optional local tasks (included as devlocal: by Taskfile.yml)
+Taskfile.dev.yml
+
 # AI-generated PR summaries (local scratch)
 .pr/
 

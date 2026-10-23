@@ -66,16 +66,6 @@ tasks:
       - echo "Opening shell in {{.SERVICE_NAME}} container..."
       - "{{.COMPOSE}} exec {{.SERVICE_NAME}} sh"
 
-  shell:root:
-    desc: Open root shell in running container (debugging)
-    interactive: true
-    preconditions:
-      - sh: 'test -n "$({{.COMPOSE}} ps -q {{.SERVICE_NAME}})"'
-        msg: "Service {{.SERVICE_NAME}} is not running. Use 'task docker:up' first."
-    cmds:
-      - echo "Opening root shell in {{.SERVICE_NAME}} container..."
-      - "{{.COMPOSE}} exec --user root {{.SERVICE_NAME}} sh"
-
   inspect:
     desc: Show container environment and processes
     silent: true
@@ -107,11 +97,11 @@ tasks:
       - echo "Quick build completed."
 
   pull:
-    desc: Pull latest base images
+    desc: Rebuild the image with freshly pulled base images
     silent: true
     cmds:
-      - echo "Pulling latest base images..."
-      - "{{.COMPOSE}} pull"
+      - echo "Pulling latest base images and rebuilding {{.SERVICE_NAME}}..."
+      - "{{.COMPOSE}} build --pull {{.SERVICE_NAME}}"
       - echo "Base images updated."
 
   compose:config:
@@ -126,28 +116,13 @@ tasks:
     cmds:
       - "{{.COMPOSE}} ps"
 
-  env:
-    desc: Show compose-related environment and config validity
-    silent: true
-    cmds:
-      - |
-        echo "Environment:"
-        echo 'COMPOSE={{.COMPOSE}}'
-        echo 'SERVICE_NAME={{.SERVICE_NAME}}'
-        echo 'PUBLIC_DIR={{.PUBLIC_DIR}}'
-        echo 'PODCASTS_DIR={{.PODCASTS_DIR}}'
-        echo
-        echo "Docker Compose config:"
-        {{.COMPOSE}} config --quiet 2>/dev/null && echo 'Compose file: OK' || echo 'Compose file: INVALID'
-
   clean:
-    desc: Remove containers, networks, and volumes (prune)
+    desc: Remove this project's containers, networks, and volumes
     silent: true
-    prompt: "This will remove containers, networks, and volumes. Continue?"
+    prompt: "This will remove this project's containers, networks, and volumes. Continue?"
     cmds:
-      - echo "Cleaning Docker resources..."
-      - "{{.COMPOSE}} down --volumes"
-      - docker system prune -f
+      - echo "Cleaning {{.SERVICE_NAME}} Docker resources..."
+      - "{{.COMPOSE}} down --volumes --remove-orphans"
       - echo "Docker cleanup completed."
 
   clean:all:
@@ -167,4 +142,4 @@ tasks:
       UID: '{{.UID | default "1000"}}'
       GID: '{{.GID | default "1000"}}'
     cmds:
-      - sudo chown -R {{.UID}}:{{.GID}} {{.PODCASTS_DIR}} {{.PUBLIC_DIR}} || true
+      - sudo chown -R {{.UID}}:{{.GID}} {{.PODCASTS_DIR}} {{.PUBLIC_DIR}}
