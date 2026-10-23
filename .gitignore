@@ -22,6 +22,7 @@ venv/
 
 # Duration cache (local)
 .podcastify-cache.json
+cache/
 
 # Docker artifacts (optional)
 docker-data/

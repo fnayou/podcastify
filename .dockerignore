@@ -1,7 +1,8 @@
-.git
-public/*
-podcasts/*
-__pycache__/
-*.py[cod]
-*.log
-.env
+*
+!app.py
+!requirements.txt
+!podcastify/
+!docker/podcastify/Caddyfile
+!docker/podcastify/entrypoint.sh
+**/__pycache__/
+**/*.py[cod]
