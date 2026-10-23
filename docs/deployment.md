@@ -29,9 +29,6 @@ services:
     environment:
       - SERVICE_PORT=${SERVICE_PORT:-8080}
       - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://localhost:${HOST_PORT:-8080}}
-      - PODCASTS_ROOT=/app/podcasts
-      - PUBLIC_ROOT=/app/public
-      - CACHE_ROOT=/app/.cache
       - RUN_ON_START=${RUN_ON_START:-true}
       - PUBLISH_XML=${PUBLISH_XML:-true}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
@@ -64,14 +61,13 @@ PGID=1000
 | `HOST_PORT` | `8080` | Host port exposed to the outside. |
 | `SERVICE_PORT` | `8080` | Container port Caddy listens on. |
 | `PUBLIC_BASE_URL` | `http://localhost:8080` | Base URL used in generated enclosure and image links. |
-| `PODCASTS_ROOT` | `/app/podcasts` | In-container path to podcast configs. |
-| `PUBLIC_ROOT` | `/app/public` | In-container path to media and generated feeds. |
-| `CACHE_ROOT` | `/app/.cache` | In-container path to the ffprobe duration cache and Caddy state. Not served over HTTP. |
 | `PUID` | `1000` | uid the container drops to when started as root. Match the owner of the bind-mounts. |
 | `PGID` | `1000` | gid the container drops to when started as root. |
 | `RUN_ON_START` | `true` | Run generator on container startup. The entrypoint tests the literal `true`. |
 | `PUBLISH_XML` | `true` | Write XML files to disk. Accepts `true/yes/1/on` and `false/no/0/off`; other values warn and count as false. |
 | `LOG_LEVEL` | `INFO` | Logging verbosity: `DEBUG`, `INFO`, `WARNING`, or `ERROR`. |
+
+The paths inside the container are fixed: `/app/public`, `/app/podcasts` and `/app/.cache`. To keep your data elsewhere on the host, change the left side of the volume mounts in `docker-compose.yml` (see [ADR 0004](adr/0004-path-env-vars-are-internal.md)).
 
 ## Log Visibility
 
@@ -136,7 +132,7 @@ services:
     cap_drop: ["ALL"]
 ```
 
-The root filesystem is read-only. `public/`, `podcasts/` and `cache/` stay writable bind-mounts, and Caddy keeps its data under `CACHE_ROOT`. The cache is outside `public/`, so it is never served.
+The root filesystem is read-only. `public/`, `podcasts/` and `cache/` stay writable bind-mounts, and Caddy keeps its data under the cache mount (`/app/.cache`). The cache is outside `public/`, so it is never served.
 
 ## Caddyfile
 

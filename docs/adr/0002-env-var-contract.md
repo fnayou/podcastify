@@ -9,9 +9,9 @@ Accepted
 The variable controlling the in-container Caddy listen port was renamed from
 `PORT` to `SERVICE_PORT` in the v1.0.1 runtime simplification, and `HOST_PORT`
 was introduced for the host-side mapping. The generator itself only ever reads
-`PUBLIC_BASE_URL`, `PODCASTS_ROOT`, `PUBLIC_ROOT`, `RUN_ON_START`, and
-`PUBLISH_XML` (`podcastify/config.py:20-24`); it does not read any port
-variable. Caddy binds `{$SERVICE_PORT}` (`docker/podcastify/Caddyfile:1`).
+`PUBLIC_BASE_URL`, `RUN_ON_START`, `PUBLISH_XML` and `LOG_LEVEL`, plus the
+internal path defaults of ADR 0004 (`podcastify/config.py`); it does not read
+any port variable. Caddy binds `{$SERVICE_PORT}` (`docker/podcastify/Caddyfile:1`).
 
 After two reboots the docs drifted: `docs/deployment.md` still teaches `PORT`,
 which is silently ignored by the shipped image. This ADR fixes the contract so
@@ -26,10 +26,14 @@ The canonical environment contract is:
 | `HOST_PORT` | compose only | `8080` | Host port published to the outside |
 | `SERVICE_PORT` | Caddy, Dockerfile, compose | `8080` | In-container Caddy listen port |
 | `PUBLIC_BASE_URL` | generator (`Config.BASE_URL`) | `http://localhost:8080` | Base URL embedded in enclosure/image links |
-| `PODCASTS_ROOT` | generator | `/app/podcasts` | YAML config dir |
-| `PUBLIC_ROOT` | generator | `/app/public` | Media + generated feeds dir |
+| `PUID` | entrypoint, compose | `1000` | uid the container drops to when started as root |
+| `PGID` | entrypoint, compose | `1000` | gid the container drops to when started as root |
 | `RUN_ON_START` | generator, entrypoint | `true` | Run generator once at boot |
 | `PUBLISH_XML` | generator | `true` | Write `<name>.xml` (false = dry run) |
+| `LOG_LEVEL` | generator | `INFO` | `DEBUG`, `INFO`, `WARNING` or `ERROR` |
+
+`PODCASTS_ROOT`, `PUBLIC_ROOT` and `CACHE_ROOT` are not part of the contract:
+they are image-internal defaults, see ADR 0004.
 
 `PORT` is retired. It must not appear in any tracked file except a one-line
 migration note.

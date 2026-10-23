@@ -70,9 +70,6 @@ services:
     environment:
       - SERVICE_PORT=${SERVICE_PORT:-8080}
       - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://localhost:${HOST_PORT:-8080}}
-      - PODCASTS_ROOT=/app/podcasts
-      - PUBLIC_ROOT=/app/public
-      - CACHE_ROOT=/app/.cache
       - RUN_ON_START=${RUN_ON_START:-true}
       - PUBLISH_XML=${PUBLISH_XML:-true}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
