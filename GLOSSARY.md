@@ -13,4 +13,4 @@
 - **`RUN_ON_START`**: if true, generator runs once at container boot before Caddy serves content.
 - **`PUBLISH_XML`**: if false, validates/discovers episodes but skips writing `<name>.xml` (dry run).
 - **`LOG_LEVEL`**: env var controlling logging verbosity (`DEBUG`, `INFO`, `WARNING`, `ERROR`). Default `INFO`. Used by stdlib `logging` module; controls what appears in `docker compose logs`.
-- **Channel fields / Episode fields**: whitelisted YAML keys copied into feed metadata — `Config.CHANNEL_FIELDS` / `Config.EPISODE_FIELDS` (`podcastify/config.py`).
+- **Channel fields / Episode fields**: the YAML keys the feed reads, declared as fields of `PodcastChannelModel` / `EpisodeModel` (`podcastify/parser.py`). Any other key is ignored with an "Unknown config key" warning.
