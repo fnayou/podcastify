@@ -1,6 +1,7 @@
 import argparse
 import logging
 import os
+import re
 import tempfile
 import time
 from pathlib import Path
@@ -22,6 +23,7 @@ logger = logging.getLogger(__name__)
 class PodcastProcessor:
     TEMP_SUFFIX = ".xml.tmp"
     STALE_TEMP_AGE_SECONDS = 600
+    BUILD_DATE = re.compile(r"<lastBuildDate>[^<]*</lastBuildDate>")
 
     def __init__(self, dry_run: bool = False):
         self.dry_run = dry_run
@@ -45,6 +47,14 @@ class PodcastProcessor:
             if value is not None:
                 meta[field_alias] = value
         return meta
+
+    @classmethod
+    def _unchanged(cls, out: Path, xml: str) -> bool:
+        try:
+            current = out.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            return False
+        return cls.BUILD_DATE.sub("", current) == cls.BUILD_DATE.sub("", xml)
 
     def process_podcast(self, podcast_name: str, config_path: Path) -> bool:
         try:
@@ -109,6 +119,9 @@ class PodcastProcessor:
             if Config.PUBLISH_XML and not self.dry_run:
                 xml = self.rss_generator.generate_feed_xml(podcast_name, meta, episodes)
                 out = Config.PUBLIC_ROOT / f"{podcast_name}.xml"
+                if self._unchanged(out, xml):
+                    logger.info(f"Unchanged {podcast_name}: {len(episodes)} episodes, kept {out}")
+                    return True
                 logger.debug(f"Write path: {out}, bytes: {len(xml)}")
                 fd, tmp = tempfile.mkstemp(
                     dir=str(Config.PUBLIC_ROOT),

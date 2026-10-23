@@ -3,6 +3,7 @@
 
 import os
 import time
+from datetime import datetime, timezone
 
 import yaml
 
@@ -386,6 +387,55 @@ class TestAtomicWrite:
         assert PodcastProcessor().process_podcast("myshow", cfg) is False
         assert not [p for p in tmp_path.iterdir() if p.name.endswith(".tmp")]
         assert not (tmp_path / "myshow.xml").exists()
+
+
+class TestUnchangedFeed:
+    def _clock(self, mocker, *moments):
+        class SteppingDatetime(datetime):
+            ticks = iter(moments)
+
+            @classmethod
+            def now(cls, tz=None):
+                return next(cls.ticks)
+
+        mocker.patch("podcastify.rss.datetime", SteppingDatetime)
+
+    def test_unchanged_content_keeps_the_existing_feed(self, tmp_path, monkeypatch, mocker, caplog):
+        cfg = _setup_show(tmp_path, monkeypatch)
+        self._clock(mocker, datetime(2030, 1, 1, tzinfo=timezone.utc), datetime(2030, 1, 2, tzinfo=timezone.utc))
+        assert PodcastProcessor().process_podcast("myshow", cfg) is True
+        feed = tmp_path / "myshow.xml"
+        first = feed.read_text(encoding="utf-8")
+        inode = feed.stat().st_ino
+        assert PodcastProcessor().process_podcast("myshow", cfg) is True
+        assert feed.read_text(encoding="utf-8") == first
+        assert feed.stat().st_ino == inode
+        assert "01 Jan 2030" in first
+        assert any("Unchanged myshow" in r.message for r in caplog.records)
+        assert not [p for p in tmp_path.iterdir() if p.name.endswith(".tmp")]
+
+    def test_changed_content_rewrites_the_feed(self, tmp_path, monkeypatch, mocker):
+        cfg = _setup_show(tmp_path, monkeypatch)
+        self._clock(mocker, datetime(2030, 1, 1, tzinfo=timezone.utc), datetime(2030, 1, 2, tzinfo=timezone.utc))
+        assert PodcastProcessor().process_podcast("myshow", cfg) is True
+        (tmp_path / "myshow" / "ep2.mp3").write_bytes(b"\x00" * 64)
+        cfg.write_text(
+            yaml.safe_dump(
+                {"title": "T", "description": "D", "episodes": [{"file": "ep.mp3"}, {"file": "ep2.mp3"}]}
+            ),
+            encoding="utf-8",
+        )
+        assert PodcastProcessor().process_podcast("myshow", cfg) is True
+        xml = (tmp_path / "myshow.xml").read_text(encoding="utf-8")
+        assert "ep2.mp3" in xml
+        assert "02 Jan 2030" in xml
+
+    def test_undecodable_existing_feed_is_replaced(self, tmp_path, monkeypatch):
+        cfg = _setup_show(tmp_path, monkeypatch)
+        feed = tmp_path / "myshow.xml"
+        feed.write_bytes(b"\xff\xfe broken")
+        assert PodcastProcessor().process_podcast("myshow", cfg) is True
+        assert "<rss" in feed.read_text(encoding="utf-8")
 
 
 class TestStaleTempFiles:
