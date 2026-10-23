@@ -32,6 +32,12 @@ class TestSmokeScript:
         assert "/smoke.xml" in text
         assert "stat -c %u" in text
 
+    def test_serves_a_real_audio_fixture_and_checks_its_duration(self):
+        text = SCRIPT.read_text(encoding="utf-8")
+        assert "tests/fixtures/audio/cbr.mp3" in text
+        assert (ROOT / "tests" / "fixtures" / "audio" / "cbr.mp3").is_file()
+        assert "<itunes:duration>0:01</itunes:duration>" in text
+
     def test_removes_its_container_on_exit(self):
         text = SCRIPT.read_text(encoding="utf-8")
         assert "trap" in text

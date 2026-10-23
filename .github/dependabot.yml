@@ -10,6 +10,11 @@ updates:
       python:
         patterns:
           - "*"
+        exclude-patterns:
+          - "tinytag"
+      tinytag:
+        patterns:
+          - "tinytag"
 
   - package-ecosystem: docker
     directory: /docker/podcastify

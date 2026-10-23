@@ -10,7 +10,6 @@ FROM python:3.12-alpine3.22
 # su-exec: drop from root to PUID/PGID at runtime (entrypoint).
 # hadolint ignore=DL3018
 RUN apk upgrade --no-cache && apk add --no-cache \
-    ffmpeg \
     tini \
     su-exec \
     ca-certificates

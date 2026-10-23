@@ -24,7 +24,7 @@ fetch() {
 }
 
 mkdir -p "$WORK/podcasts" "$WORK/public/smoke"
-printf 'ID3' > "$WORK/public/smoke/ep01.mp3"
+cp "$(dirname "$0")/../tests/fixtures/audio/cbr.mp3" "$WORK/public/smoke/ep01.mp3"
 cat > "$WORK/podcasts/smoke-podcast.yaml" <<'EOF'
 name: "smoke"
 title: "Smoke"
@@ -50,7 +50,9 @@ docker run -d --name "$NAME" \
   "$IMAGE" >/dev/null
 
 fetch -o /dev/null "http://127.0.0.1:${PORT}/healthz" || fail "/healthz did not return 200 within 30 s"
-fetch "http://127.0.0.1:${PORT}/smoke.xml" | grep -q '<rss' || fail "/smoke.xml is not an RSS feed"
+fetch "http://127.0.0.1:${PORT}/smoke.xml" > "$WORK/smoke.xml" || fail "/smoke.xml not served"
+grep -q '<rss' "$WORK/smoke.xml" || fail "/smoke.xml is not an RSS feed"
+grep -q '<itunes:duration>0:01</itunes:duration>' "$WORK/smoke.xml" || fail "episode duration not read from the media file"
 fetch -o /dev/null "http://127.0.0.1:${PORT}/smoke/ep01.mp3" || fail "episode media not served"
 
 owner="$(docker exec "$NAME" sh -c 'stat -c %u /proc/$(pidof caddy)')"
