@@ -3,6 +3,22 @@ set -e
 
 PUID="${PUID:-1000}"
 PGID="${PGID:-1000}"
+PUBLIC_ROOT="${PUBLIC_ROOT:-/app/public}"
+PODCASTS_ROOT="${PODCASTS_ROOT:-/app/podcasts}"
+CACHE_ROOT="${CACHE_ROOT:-/app/.cache}"
+
+owned() {
+  [ "$(stat -c %u:%g "$1")" = "${PUID}:${PGID}" ]
+}
+
+claim() {
+  path="$1"
+  shift
+  if ! owned "$path"; then
+    chown "$@" "${PUID}:${PGID}" "$path" \
+      || echo "⚠️  Could not chown ${path}; continuing (check bind-mount perms)"
+  fi
+}
 
 echo "🔧 Podcastify container starting..."
 
@@ -11,14 +27,20 @@ echo "🔧 Podcastify container starting..."
 #      so it starts non-root. Compatible with `cap_drop: ALL` + `read_only`
 #      because no privileged ops are needed — bind-mounts must already be owned
 #      by that uid. We just run as the current user.
-#   2. Convenience: container starts as root (default). We chown the writable
-#      dirs to PUID/PGID and drop privileges with su-exec. Adapts to any host
+#   2. Convenience: container starts as root (default). We chown only what the
+#      app writes (cache, public/ itself, public/*.xml) to PUID/PGID, never the
+#      media or podcast configs, and drop privileges with su-exec. Adapts to any host
 #      bind-mount owner (NAS/desktop), but needs CHOWN/SETUID/SETGID caps.
 if [ "$(id -u)" = "0" ]; then
   echo "🔐 Started as root; preparing dirs and dropping to ${PUID}:${PGID}."
-  mkdir -p /app/public /app/podcasts /app/.cache
-  chown -R "${PUID}:${PGID}" /app/.cache /app/public /app/podcasts 2>/dev/null \
-    || echo "⚠️  Could not chown data dirs; continuing (check bind-mount perms)"
+  mkdir -p "$PUBLIC_ROOT" "$PODCASTS_ROOT" "$CACHE_ROOT"
+  claim "$CACHE_ROOT" -R
+  claim "$PUBLIC_ROOT"
+  for feed in "$PUBLIC_ROOT"/*.xml; do
+    if [ -e "$feed" ]; then
+      claim "$feed"
+    fi
+  done
   RUNAS="su-exec ${PUID}:${PGID}"
 else
   echo "ℹ️  Started as uid $(id -u); skipping chown/su-exec (hardened mode)."
