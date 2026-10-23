@@ -91,6 +91,26 @@ The `commit-msg` hook checks this locally (`task dev:hooks`). The `commits` CI c
 4. Commit with the conventional format
 5. Push and open a PR titled in the same format
 
+## CI time budget
+
+CI execution time is a requirement. A PR must not push any workflow past its budget. Every PR that touches `.github/workflows/` reports the job durations before and after the change in its description.
+
+| Scope | Baseline (median) | Budget |
+|---|---|---|
+| CI `test` job | 24 s | 60 s |
+| CI `docker` job | 2 min 07 s | 3 min |
+| PR total (CI wall time, `test` start to `docker` end) | 2 min 32 s | 4 min |
+| Release (all jobs, wall time) | 3 min 46 s | 6 min |
+
+Baseline measured on 2026-10-23 with `gh`: median of the last 8 successful CI runs on PRs to `main` (`test` 11 to 45 s, `docker` 1 min 44 s to 2 min 31 s), and the last release run, `v1.1.1` (`test` 35 s, `docker` 3 min 01 s, `release` 4 s).
+
+To see the durations of the latest runs:
+
+```bash
+task ci:durations           # last 5 successful CI and Release runs
+task ci:durations LIMIT=8
+```
+
 ## Reporting Bugs
 
 Include:
