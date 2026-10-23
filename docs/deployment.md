@@ -77,8 +77,8 @@ The podcastify generator logs at different levels. The visibility depends on how
 |---|---|---|
 | Boot, `RUN_ON_START=true` | YES | `entrypoint.sh` runs the generator under `tini` (PID 1) before `exec`-ing Caddy; stdout is inherited by the container |
 | Caddy | YES | Caddy runs in the foreground under `tini` and logs to stdout |
-| `docker compose exec podcastify python /app/app.py generate` | NO | separate process attached to the exec client's terminal, not PID 1 — prints in your shell |
-| `docker compose run --rm ...` | NO | separate temporary container, its own log stream |
+| `docker compose exec podcastify /entrypoint.sh generate` | NO | separate process attached to the exec client's terminal, not PID 1 — prints in your shell. Runs as `PUID`/`PGID` like the boot run, so files are never root-owned |
+| `docker compose run --rm podcastify generate` | NO | separate temporary container, its own log stream |
 
 **Note**: On-demand `exec` generation will not show in the main service log stream. Check your shell terminal for the output, or re-run the generator at boot by restarting the container.
 
