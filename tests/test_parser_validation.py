@@ -19,6 +19,56 @@ def _pub_date(raw):
     return model.episodes[0].pub_date
 
 
+def _validate_episodes(episodes):
+    return validate_podcast_config({"title": "T", "description": "D", "episodes": episodes})
+
+
+class TestEpisodeFile:
+    @pytest.mark.parametrize("name", ["", ".", "..", "a/..", "../", "/"])
+    def test_rejects_non_filenames(self, name):
+        model, err = _validate_episodes([{"file": name}])
+        assert model is None
+        assert "file" in err
+
+    @pytest.mark.parametrize("name", ["ep.mp3", "/some/path/ep.mp3", "Q&A #1.mp3"])
+    def test_accepts_plain_filenames(self, name):
+        model, err = _validate_episodes([{"file": name}])
+        assert err is None
+        assert model.episodes[0].file == name
+
+
+class TestDuplicateEpisodes:
+    def test_duplicate_file_names_both_entries(self):
+        model, err = _validate_episodes([{"file": "a.mp3"}, {"file": "b.mp3"}, {"file": "a.mp3"}])
+        assert model is None
+        assert "duplicate episode file 'a.mp3'" in err
+        assert "episodes 1 and 3" in err
+
+    def test_duplicate_file_with_different_directories(self):
+        model, err = _validate_episodes([{"file": "x/a.mp3"}, {"file": "y/a.mp3"}])
+        assert model is None
+        assert "duplicate episode file 'a.mp3'" in err
+
+    def test_duplicate_guid_names_both_entries(self):
+        model, err = _validate_episodes(
+            [{"file": "a.mp3", "guid": "g"}, {"file": "b.mp3"}, {"file": "c.mp3", "guid": "g"}]
+        )
+        assert model is None
+        assert "duplicate episode guid 'g'" in err
+        assert "episodes 1 and 3" in err
+
+    def test_distinct_entries_pass(self):
+        model, err = _validate_episodes(
+            [{"file": "a.mp3", "guid": "g1"}, {"file": "b.mp3", "guid": "g2"}, {"file": "c.mp3"}]
+        )
+        assert err is None
+        assert len(model.episodes) == 3
+
+    def test_no_episodes_passes(self):
+        model, err = validate_podcast_config({"title": "T", "description": "D"})
+        assert err is None
+
+
 class TestPubDate:
     @pytest.mark.parametrize(
         "raw, expected",

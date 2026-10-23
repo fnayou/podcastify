@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Tests for utility/helper functions."""
 
-from podcastify.parser import _coerce_bool, _sanitize_name
+import pytest
+
+from podcastify.parser import _coerce_bool, _is_valid_name
 
 
 class TestCoerceBool:
@@ -53,21 +55,14 @@ class TestCoerceBool:
         assert _coerce_bool(" false ") is False
 
 
-class TestSanitizeName:
-    def test_clean_name(self):
-        assert _sanitize_name("myshow") == "myshow"
+class TestIsValidName:
+    @pytest.mark.parametrize("name", ["myshow", "My_Show-2", "show.v2", "a", "9lives"])
+    def test_valid(self, name):
+        assert _is_valid_name(name) is True
 
-    def test_strips_dots(self):
-        assert _sanitize_name("../../../etc") == "etc"
-
-    def test_strips_slashes(self):
-        assert _sanitize_name("foo/bar") == "foobar"
-
-    def test_strips_backslashes(self):
-        assert _sanitize_name("foo\\bar") == "foobar"
-
-    def test_empty_after_sanitize(self):
-        assert _sanitize_name("../..") == ""
-
-    def test_mixed(self):
-        assert _sanitize_name("a/../b/c\\d") == "abcd"
+    @pytest.mark.parametrize(
+        "name",
+        ["", "..", "../../etc", "foo/bar", "foo\\bar", "my..show", "my show", "a#b", "a?b", "a%b", "café", "-a", ".a", "_a", "a\n"],
+    )
+    def test_invalid(self, name):
+        assert _is_valid_name(name) is False

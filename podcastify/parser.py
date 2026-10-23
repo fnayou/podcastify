@@ -1,4 +1,5 @@
 import email.utils as eut
+import re
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -29,8 +30,11 @@ def _coerce_bool(value: Any, default: bool = False) -> bool:
 
 
 
-def _sanitize_name(name: str) -> str:
-    return name.replace("..", "").replace("/", "").replace("\\", "").strip()
+_NAME_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
+
+
+def _is_valid_name(name: str) -> bool:
+    return bool(_NAME_PATTERN.fullmatch(name)) and ".." not in name
 
 
 class EpisodeModel(BaseModel):
@@ -50,6 +54,13 @@ class EpisodeModel(BaseModel):
     episode_type: Optional[str] = None
     guid: Optional[str] = None
     duration_hms: Optional[str] = None
+
+    @field_validator("file")
+    @classmethod
+    def validate_file(cls, v: str) -> str:
+        if Path(v).name in ("", ".", ".."):
+            raise ValueError(f"file must name a media file, got '{v}'")
+        return v
 
     @field_validator("pub_date", mode="before")
     @classmethod
@@ -100,6 +111,25 @@ class PodcastChannelModel(BaseModel):
     def map_legacy_author(self) -> "PodcastChannelModel":
         if not self.author_name and self.author:
             self.author_name = self.author
+        return self
+
+    @model_validator(mode="after")
+    def reject_duplicate_episodes(self) -> "PodcastChannelModel":
+        files: Dict[str, int] = {}
+        guids: Dict[str, int] = {}
+        for index, ep in enumerate(self.episodes or [], start=1):
+            fname = Path(ep.file).name
+            if fname in files:
+                raise ValueError(
+                    f"duplicate episode file '{fname}' (episodes {files[fname]} and {index})"
+                )
+            files[fname] = index
+            if ep.guid:
+                if ep.guid in guids:
+                    raise ValueError(
+                        f"duplicate episode guid '{ep.guid}' (episodes {guids[ep.guid]} and {index})"
+                    )
+                guids[ep.guid] = index
         return self
 
     @field_validator("type")
@@ -161,16 +191,28 @@ class ConfigurationManager:
             logger.debug(f"Podcasts dir scan: {Config.PODCASTS_ROOT} does not exist")
             return []
         configs: List[Tuple[str, Path]] = []
+        seen: Dict[str, Path] = {}
         for cfg in sorted(Config.PODCASTS_ROOT.iterdir()):
             if not cfg.is_file():
                 continue
             name = cfg.name
             if name.endswith(("-podcast.yaml", "-podcast.yml")):
-                pod_name = _sanitize_name(name.rsplit("-podcast.", 1)[0])
-                if not pod_name:
-                    logger.warning(f"Skipping invalid podcast name from file: {cfg.name}")
+                pod_name = name.rsplit("-podcast.", 1)[0]
+                if not _is_valid_name(pod_name):
+                    logger.warning(
+                        f"Skipping config {cfg.name}: podcast name '{pod_name}' must start with a "
+                        "letter or digit and contain only letters, digits, '.', '_' and '-' "
+                        "(no '..')"
+                    )
+                    continue
+                if pod_name in seen:
+                    logger.error(
+                        f"Skipping config {cfg.name}: podcast name '{pod_name}' is already "
+                        f"used by {seen[pod_name].name}"
+                    )
                     continue
                 logger.debug(f"Found podcast config: {cfg.name}")
+                seen[pod_name] = cfg
                 configs.append((pod_name, cfg))
         return configs
 

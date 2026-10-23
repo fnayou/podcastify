@@ -3,6 +3,7 @@
 
 from pathlib import Path
 
+import pytest
 import yaml
 
 from podcastify.config import Config
@@ -98,19 +99,42 @@ class TestDiscoverPodcastConfigs:
         result = ConfigurationManager.discover_podcast_configs()
         assert result == []
 
-    def test_sanitizes_name(self, tmp_path, monkeypatch):
+    @pytest.mark.parametrize(
+        "filename",
+        [
+            "my..show-podcast.yaml",
+            "..-podcast.yaml",
+            "-podcast.yaml",
+            "my show-podcast.yaml",
+            "my#show-podcast.yaml",
+            "my?show-podcast.yaml",
+            "my%show-podcast.yaml",
+            "café-podcast.yaml",
+            "-lead-podcast.yaml",
+        ],
+    )
+    def test_rejects_invalid_names(self, tmp_path, monkeypatch, caplog, filename):
         monkeypatch.setattr("podcastify.config.Config.PODCASTS_ROOT", tmp_path)
-        # Create files that would derive names needing sanitization
-        (tmp_path / "my..show-podcast.yaml").write_text("name: myshow", encoding="utf-8")
+        (tmp_path / filename).write_text("name: x", encoding="utf-8")
         (tmp_path / "other-podcast.yaml").write_text("name: other", encoding="utf-8")
         result = ConfigurationManager.discover_podcast_configs()
-        names = [n for n, _ in result]
-        assert "myshow" in names  # dots removed
-        assert "other" in names
+        assert [n for n, _ in result] == ["other"]
+        assert any(filename in r.message and r.levelname in ("WARNING", "ERROR") for r in caplog.records)
 
-    def test_skips_empty_name_after_sanitize(self, tmp_path, monkeypatch, caplog):
+    @pytest.mark.parametrize("name", ["myshow", "My_Show-2", "show.v2", "a", "9lives"])
+    def test_accepts_valid_names(self, tmp_path, monkeypatch, name):
         monkeypatch.setattr("podcastify.config.Config.PODCASTS_ROOT", tmp_path)
-        (tmp_path / "..-podcast.yaml").write_text("name: empty", encoding="utf-8")
+        (tmp_path / f"{name}-podcast.yaml").write_text("name: x", encoding="utf-8")
         result = ConfigurationManager.discover_podcast_configs()
-        assert result == []
-        assert any(record.levelname == "WARNING" for record in caplog.records)
+        assert [n for n, _ in result] == [name]
+
+    def test_rejects_second_config_for_same_name(self, tmp_path, monkeypatch, caplog):
+        monkeypatch.setattr("podcastify.config.Config.PODCASTS_ROOT", tmp_path)
+        (tmp_path / "myshow-podcast.yaml").write_text("name: one", encoding="utf-8")
+        (tmp_path / "myshow-podcast.yml").write_text("name: two", encoding="utf-8")
+        result = ConfigurationManager.discover_podcast_configs()
+        assert result == [("myshow", tmp_path / "myshow-podcast.yaml")]
+        errors = [r.message for r in caplog.records if r.levelname == "ERROR"]
+        assert len(errors) == 1
+        assert "myshow-podcast.yaml" in errors[0]
+        assert "myshow-podcast.yml" in errors[0]
