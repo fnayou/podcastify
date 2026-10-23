@@ -1,4 +1,5 @@
 default_install_hook_types:
+  - pre-commit
   - commit-msg
 
 repos:
@@ -19,3 +20,21 @@ repos:
           - ci
           - chore
           - revert
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: f368fb366ff7f2f808dd324b83a6d32267799e19 # frozen: v0.17.2
+    hooks:
+      - id: ruff-check
+        stages: [pre-commit]
+      - id: ruff-format
+        types_or: [python]
+        stages: [pre-commit]
+
+  - repo: local
+    hooks:
+      - id: hadolint
+        name: hadolint
+        language: docker_image
+        entry: hadolint/hadolint:v2.15.1@sha256:32dac94127fd60b7b7e3fbfc65e1383b9b5e25c9bfd7b8536de7a539fe68a12d hadolint
+        files: Dockerfile$
+        stages: [pre-commit]

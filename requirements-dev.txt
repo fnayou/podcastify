@@ -14,4 +14,5 @@ pytest==9.1.1
 pytest-cov==7.1.0
 pytest-mock==3.17.0
 python-discovery==1.6.4
+ruff==0.17.2
 virtualenv==21.14.13
