@@ -48,6 +48,14 @@ class TestConfigFromEnv:
         monkeypatch.setenv("PUBLIC_BASE_URL", "https://example.com")
         assert Config.BASE_URL == "https://example.com"
 
+    def test_base_url_trailing_slash_stripped(self, monkeypatch):
+        monkeypatch.setenv("PUBLIC_BASE_URL", "https://example.com/pods//")
+        assert Config.BASE_URL == "https://example.com/pods"
+
+    def test_base_url_whitespace_stripped(self, monkeypatch):
+        monkeypatch.setenv("PUBLIC_BASE_URL", "  https://example.com/ \n")
+        assert Config.BASE_URL == "https://example.com"
+
     def test_publish_xml_false(self, monkeypatch):
         monkeypatch.setenv("PUBLISH_XML", "false")
         assert Config.PUBLISH_XML is False

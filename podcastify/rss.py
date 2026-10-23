@@ -174,7 +174,7 @@ class RSSGenerator:
             file_path = Path(str(file_path))
 
         fname = file_path.name
-        media_url = f"{Config.BASE_URL}/{podcast_name}/{fname}"
+        media_url = EpisodeManager.media_url(podcast_name, fname)
 
         try:
             stat_result = file_path.stat()

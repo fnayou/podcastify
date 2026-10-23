@@ -58,6 +58,36 @@ class TestProcessPodcast:
         assert ok is False
         assert any("validation" in record.message.lower() for record in caplog.records)
 
+    def test_bad_base_url_scheme(self, tmp_path, monkeypatch, caplog):
+        monkeypatch.setattr("podcastify.config.Config.PODCASTS_ROOT", tmp_path)
+        monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
+        monkeypatch.setenv("PUBLIC_BASE_URL", "ftp://example.com")
+        cfg = tmp_path / "myshow-podcast.yaml"
+        cfg.write_text(
+            yaml.safe_dump(
+                {
+                    "title": "My Show",
+                    "author-name": "Author",
+                    "description": "Desc",
+                    "episodes": [{"file": "ep01.mp3"}],
+                }
+            ),
+            encoding="utf-8",
+        )
+        pub = tmp_path / "myshow"
+        pub.mkdir()
+        (pub / "ep01.mp3").write_bytes(b"\x00" * 64)
+        proc = PodcastProcessor()
+        ok = proc.process_podcast("myshow", cfg)
+        assert ok is False
+        assert not (tmp_path / "myshow.xml").exists()
+        assert any(
+            record.levelname == "ERROR"
+            and "PUBLIC_BASE_URL" in record.message
+            and "ftp://example.com" in record.message
+            for record in caplog.records
+        )
+
     def test_missing_public_dir(self, tmp_path, monkeypatch, caplog):
         monkeypatch.setattr("podcastify.config.Config.PODCASTS_ROOT", tmp_path)
         monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
