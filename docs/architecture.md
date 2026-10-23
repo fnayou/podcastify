@@ -14,7 +14,7 @@ Podcastify is a Python **package** (`podcastify/`) + thin `app.py` entry point. 
 | `podcastify/rss.py` | `RSSGenerator` | iTunes-compatible XML feed generation. |
 | `podcastify/cli.py` | `PodcastProcessor`, `FeedWatcher`, `main` | Orchestration: load → validate → discover → generate → atomic write when the content changed; optional polling watcher that regenerates on config or media changes. |
 
-Note: 6 logical classes in 5 modules; `ConfigurationManager` + `EpisodeManager` (+ pydantic models + helpers) share `parser.py`.
+Note: 7 logical classes (`Config`, `MediaProcessor`, `ConfigurationManager`, `EpisodeManager`, `RSSGenerator`, `PodcastProcessor`, `FeedWatcher`) in 5 modules; `ConfigurationManager` + `EpisodeManager` (+ pydantic models + helpers) share `parser.py`, and `PodcastProcessor` + `FeedWatcher` share `cli.py`.
 
 ## Data Flow
 
@@ -58,6 +58,8 @@ Scans `./podcasts/` for files matching `<name>-podcast.yaml`. The `<name>` prefi
 3. Format as `H:MM:SS` or `M:SS` for iTunes compatibility.
 4. If ffprobe fails, the `<itunes:duration>` tag is omitted.
 
+Results are cached in memory by `(path, mtime)` and persisted to `<CACHE_ROOT>/.podcastify-cache.json` (`/app/.cache` in the image, outside the directory Caddy serves). Entries for files that no longer exist are dropped when the cache is saved, and a cache left in `PUBLIC_ROOT` by an older version is migrated on first load. See [ADR 0003](adr/0003-duration-cache-location.md).
+
 ### Image Resolution
 
 Images can be:
@@ -73,8 +75,10 @@ Episode GUIDs default to SHA-1 of `<podcast-name>/<filename>` and are marked wit
 ### XML Generation
 
 The generated RSS includes:
-- Standard RSS 2.0 tags (`title`, `link`, `description`, `language`, `lastBuildDate`)
+- Standard RSS 2.0 tags (`title`, `link`, `description`, `language`, `lastBuildDate`) and `atom:link rel="self"` pointing at `PUBLIC_BASE_URL/<name>.xml`
 - iTunes channel tags (`itunes:author`, `itunes:owner`, `itunes:image`, `itunes:category`, `itunes:explicit`)
-- iTunes item tags (`itunes:duration`, `itunes:episode`, `itunes:season`, `itunes:episodeType`)
+- iTunes item tags (`itunes:duration`, `itunes:episode`, `itunes:season`, `itunes:episodeType`, `itunes:explicit`)
 
-The feed is built as an `xml.etree.ElementTree` tree from the validated models, so all text and attributes are escaped by the standard library; characters XML does not allow are removed. Empty or blank values produce empty tags.
+The root element declares the `itunes`, `content` and `atom` namespaces. `itunes:explicit` is written as `true` or `false`.
+
+The feed is built as an `xml.etree.ElementTree` tree from the validated models, so all text and attributes are escaped by the standard library; characters XML does not allow are removed. Optional tags whose text is empty or blank (such as `description`, `itunes:author` and `itunes:summary`) are left out of the feed.

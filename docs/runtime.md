@@ -4,20 +4,20 @@
 
 ### Rationale
 
-Alpine Linux package versions for python:3.12-alpine3.22 are managed by Alpine's package repository and are regularly updated. Attempting to pin to specific patch versions (e.g., `caddy=2.8.4-r0`) often results in dependency conflicts as Alpine moves to newer minor/patch releases that are incompatible with the pinned versions.
-
-Since the base image `python:3.12-alpine3.22` already pins the Alpine version and Python version, and our Dockerfile rebuilds are infrequent (only on explicit rebuilds), the practical benefit of pinning individual apk packages is outweighed by the maintenance burden of tracking and updating pinned versions.
+The base image `python:3.12-alpine3.22` pins the Alpine and Python versions. Caddy does not come from Alpine's package repository: the Dockerfile copies the Caddy binary from the official `caddy` image, whose tag is pinned in the first line of the Dockerfile, because the Alpine `caddy` package lags upstream. The Alpine packages `ffmpeg`, `tini`, `su-exec` and `ca-certificates` are installed without version pins, after `apk upgrade --no-cache` has patched the base packages. Pinning those packages to patch revisions breaks as Alpine moves to newer revisions, so the maintenance burden outweighs the benefit.
 
 ### Decision
 
-- **Caddy, ffmpeg, tini, su-exec, ca-certificates**: Not pinned to specific patch revisions.
+- **Caddy**: pinned by the tag of the official `caddy` image in the Dockerfile.
+- **ffmpeg, tini, su-exec, ca-certificates**: Not pinned to specific patch revisions; `apk upgrade` runs at build time.
 - **Rationale**: The base image `python:3.12-alpine3.22` provides sufficient reproducibility for development and deployment. In production, users should run specific image digests (via `docker pull image@sha256:...`) rather than tags to ensure exact reproducibility.
 - **Alternative**: If reproducibility across releases becomes critical, maintain a separate `alpine.versions.lock` file and use a more sophisticated build process (e.g., a shell script to query apk repos and pin available versions).
 
 ### Security
 
-- Container images are built only on tagged releases (`v*.*.*`).
-- All releases are scanned by Trivy for CVEs before publishing.
+- Pull requests build the image without pushing it, then smoke test it.
+- Images are pushed to Docker Hub only on tagged releases (`v*.*.*`).
+- A release builds the amd64 image locally without pushing, scans it with Trivy (CRITICAL and HIGH findings with a fix fail the job), and only then pushes the multi-arch image. A failed scan publishes nothing.
 - SBOM and provenance attestations are attached to each release.
 
 ## Process Management
@@ -65,7 +65,7 @@ mtime, so podcast clients do not refetch it.
 
 ### Non-root via PUID/PGID
 
-The image supports two runtimes (see `entrypoint.sh`):
+The image supports two runtimes (see `entrypoint.sh` and [ADR 0005](adr/0005-puid-pgid-runtime.md)):
 
 - **Root start (default/convenience):** the entrypoint chowns only what the app
   writes to `PUID`/`PGID` (default `1000`): `CACHE_ROOT` recursively,
@@ -93,7 +93,7 @@ read-only root filesystem.
 A wget-based healthcheck is configured in the Dockerfile. It requests `/healthz`, a fixed `200 ok` response that Caddy does not access-log, and allows a 120 second start period for the first generation on a large library:
 
 ```dockerfile
-HEALTHCHECK --interval=30s --timeout=3s --start-period=120s CMD wget -q --spider http://127.0.0.1:${SERVICE_PORT}/healthz || exit 1
+HEALTHCHECK --interval=30s --timeout=3s --start-period=120s CMD ["/bin/sh", "-c", "wget -q --spider http://127.0.0.1:${SERVICE_PORT}/healthz || exit 1"]
 ```
 
 This verifies that Caddy is responding on the configured port.
