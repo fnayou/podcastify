@@ -38,17 +38,22 @@ not covered there. Read both before proposing changes to `podcastify/`.
   sets the enclosure `type` via `EpisodeManager.media_type`; unknown
   extensions default to `audio/mpeg`.
 - **Duration cache**: in-memory `_duration_cache` keyed by `(path, mtime)`,
-  persisted to `<PUBLIC_ROOT>/.podcastify-cache.json` (media.py,38).
-  Invalidates on mtime change, but entries for deleted files are never pruned.
+  persisted to `<CACHE_ROOT>/.podcastify-cache.json` (media.py). A new mtime
+  invalidates the entry. On save, only the newest mtime per path is written
+  and entries for deleted files are dropped. An ffprobe timeout is cached in
+  memory only (`_unpersisted`), so the next run probes the file again; other
+  failures are persisted.
 - **Duration fallback chain**: episode `duration_hms` (from YAML) →
   `MediaProcessor.get_duration_seconds` via `ffprobe` → omitted entirely if
   ffprobe fails (rss.py).
 - **GUID default**: SHA-1 of `<podcast_name>/<filename>`,
   `isPermaLink="false"` (rss.py). Renaming a podcast or episode file
   changes the GUID and breaks subscriber dedup/listen history.
-- **Atomic XML write**: feed is written to a tempfile in `PUBLIC_ROOT` then
-  `os.replace`'d onto `<name>.xml` (cli.py) — readers never see
-  partial XML.
+- **Atomic XML write**: feed is written to a hidden tempfile
+  (`.<name>.XXXXXXXX.xml.tmp`) in `PUBLIC_ROOT`, flushed and `fsync`ed, then
+  `os.replace`'d onto `<name>.xml` (cli.py) — readers never see partial XML,
+  and Caddy's `hide .*` never serves the tempfile. At the start of a
+  publishing run, `.*.xml.tmp` files older than 10 minutes are removed.
 - **Published datetime**: `EpisodeModel.pub_date` is parsed once in the model
   (date, datetime or ISO string; naive values are UTC; invalid values are
   logged and dropped). `EpisodeManager.discover_episodes` stores
