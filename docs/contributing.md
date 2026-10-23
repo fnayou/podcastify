@@ -17,16 +17,12 @@
    sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d
    ```
 
-3. Verify environment:
+3. Verify environment and install the commit hook:
    ```bash
    task doctor
+   pip install -r requirements-dev.txt
+   task dev:hooks
    ```
-
-4. Optional — OpenCode for AI-assisted development:
-   ```bash
-   cp .env.example .env   # sets OPENCODE_CONFIG=.opencode/opencode.json
-   ```
-   Slash commands: `/pr`, `/review`, `/release`, `/validate-changes` (see [AGENTS.md](../AGENTS.md#slash-commands)).
 
 ## Workflow
 
@@ -69,30 +65,27 @@ task docker:clean
 
 ## Commit Conventions
 
-Use [Conventional Commits](https://www.conventionalcommits.org/):
+[Conventional Commits](https://www.conventionalcommits.org/): `<type>[scope][!]: <description>`.
 
-- `feat:` — New feature
-- `fix:` — Bug fix
-- `chore:` — Maintenance, deps, tooling
-- `docs:` — Documentation changes
-- `refactor:` — Code refactoring
-- `test:` — Tests
+Types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`. Mark breaking changes with `!` or a `BREAKING CHANGE:` footer.
 
-Examples:
 ```
-feat: add season/episode numbering support
-fix: resolve image URL when using absolute paths
+feat(rss): add season/episode numbering support
+fix(parser): resolve image URL when using absolute paths
 docs: update deployment guide with nginx example
 ```
 
+The `commit-msg` hook checks this locally (`task dev:hooks`). The `commits` CI check validates the PR title and every commit subject.
+
 ## Pull Requests
 
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feat/my-feature`
-3. Make your changes
-4. Ensure `task doctor` passes
-5. Commit with conventional commit format
-6. Push and open a PR
+`main` is protected: no direct pushes, no force-push, linear history. A PR needs the `test`, `docker` and `commits` checks green, and merges by rebase only.
+
+1. Create a branch from `main`: `git checkout -b feat/my-feature`
+2. Make your changes
+3. Run `task dev:validate`
+4. Commit with the conventional format
+5. Push and open a PR titled in the same format
 
 ## Reporting Bugs
 

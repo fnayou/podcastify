@@ -1,0 +1,42 @@
+name: Commits
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  commits:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    env:
+      PATTERN: '^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-z0-9._/-]+\))?!?: .+'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check PR title
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          if ! printf '%s' "$TITLE" | grep -Eq "$PATTERN"; then
+            echo "::error::PR title does not follow Conventional Commits: $TITLE"
+            exit 1
+          fi
+
+      - name: Check commit subjects
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          status=0
+          while IFS= read -r subject; do
+            if ! printf '%s' "$subject" | grep -Eq "$PATTERN"; then
+              echo "::error::Commit subject does not follow Conventional Commits: $subject"
+              status=1
+            fi
+          done < <(git log --no-merges --format=%s "${BASE}..${HEAD}")
+          exit $status
