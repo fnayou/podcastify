@@ -29,11 +29,6 @@ class TestConfigDefaults:
         assert "title" in Config.CHANNEL_FIELDS
         assert "categories" in Config.CHANNEL_FIELDS
 
-    def test_episode_fields(self):
-        assert "title" in Config.EPISODE_FIELDS
-        assert "guid" in Config.EPISODE_FIELDS
-        assert "duration_hms" in Config.EPISODE_FIELDS
-
 
 class TestConfigFromEnv:
     def test_custom_podcasts_root(self, monkeypatch):

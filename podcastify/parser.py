@@ -165,14 +165,6 @@ class ConfigurationManager:
             return {}
 
     @staticmethod
-    def extract_podcast_metadata(config: Dict[str, Any]) -> Dict[str, Any]:
-        source = config.get("podcast", {}) if isinstance(config.get("podcast"), dict) else config
-        meta = {k: source.get(k) for k in Config.CHANNEL_FIELDS if k in source}
-        if not meta.get("author-name") and "author" in source:
-            meta["author-name"] = source["author"]
-        return meta
-
-    @staticmethod
     def discover_podcast_configs() -> List[Tuple[str, Path]]:
         if not Config.PODCASTS_ROOT.exists():
             logger.warning(f"Podcasts directory not found: {Config.PODCASTS_ROOT}")
@@ -209,15 +201,10 @@ class EpisodeManager:
     @staticmethod
     def discover_episodes(
         podcast_name: str,
-        config: Dict[str, Any],
         validated: Optional[PodcastChannelModel] = None,
     ) -> List[Dict[str, Any]]:
         pub_dir = Config.PUBLIC_ROOT / podcast_name
-        eps = None
-        if validated and validated.episodes is not None:
-            eps = [ep.model_dump(by_alias=True) for ep in validated.episodes]
-        else:
-            eps = config.get("episodes")
+        eps = [ep.model_dump(by_alias=True) for ep in validated.episodes or []] if validated else []
         if eps:
             discovered: List[Dict[str, Any]] = []
             for e in eps:
