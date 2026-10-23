@@ -17,12 +17,15 @@
    sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d
    ```
 
-3. Verify environment and install the commit hook:
+3. Check the environment, then create the virtualenv, install the requirements and the commit hook:
    ```bash
    task doctor
-   pip install -r requirements-dev.txt
-   task dev:hooks
+   task dev:setup
    ```
+
+   `task dev:setup` creates `.venv`, installs `requirements.txt` and `requirements-dev.txt` into it, and runs `task dev:hooks`. The test tasks use `.venv/bin/python` when it exists.
+
+Tasks that only you need can go in a `Taskfile.dev.yml` at the repository root. It is optional, git-ignored, and its tasks appear under the `devlocal:` prefix.
 
 ## Workflow
 
@@ -58,6 +61,8 @@ task docker:down
 task podcastify:clean:feeds
 task docker:clean
 ```
+
+`task docker:clean` removes only this project's containers, networks and volumes. `task docker:pull` rebuilds the image with freshly pulled base images.
 
 ## Code Style
 

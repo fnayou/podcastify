@@ -251,11 +251,11 @@ task docker:logs              # follow logs
 task docker:logs:recent       # recent logs only
 task docker:logs:errors       # grep errors/warnings
 task docker:shell             # shell into container
-task docker:shell:root        # root shell
 task docker:build:quick       # quick image rebuild
+task docker:pull              # rebuild with freshly pulled base images
 task docker:compose:ps        # docker compose ps
 task docker:compose:config    # resolved compose config
-task docker:clean             # down + prune volumes
+task docker:clean             # down + remove this project's volumes
 task docker:clean:all         # feeds + containers + images
 
 # Podcastify app
@@ -266,10 +266,11 @@ task podcastify:watch-public  # watch ./public (Linux, inotifywait)
 task podcastify:clean:feeds   # delete generated XML
 
 # Development
+task dev:setup                # .venv, all requirements, git hooks
 task dev:test                 # run tests
 task dev:test:coverage        # tests with 90% coverage gate
 task dev:validate             # coverage + docker build
-task doctor                   # env and directory checks
+task doctor                   # tools, versions, directories, compose file
 ```
 
 ---
