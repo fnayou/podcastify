@@ -87,7 +87,7 @@ CASES = [
 ]
 
 
-@pytest.mark.usefixtures("frozen_clock")
+@pytest.mark.usefixtures("frozen_clock", "fixed_duration")
 class TestGoldenXML:
     @pytest.mark.parametrize("podcast, config, media", CASES)
     def test_output_matches_snapshot(self, golden_roots, podcast, config, media):

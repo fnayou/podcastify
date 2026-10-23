@@ -85,7 +85,7 @@ class PodcastProcessor:
                 logger.warning(f"No episodes found for {podcast_name} in {pub_dir}")
                 return False
 
-            MediaProcessor.warm_durations_parallel([episode.path for episode in episodes])
+            MediaProcessor.warm_durations([episode.path for episode in episodes])
 
             episodes.sort(key=lambda episode: episode.published, reverse=True)
 
