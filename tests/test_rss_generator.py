@@ -181,6 +181,35 @@ class TestGenerateFeedXml:
         assert "<itunes:episodeType>" not in item
 
 
+class TestMediaUrls:
+    def test_enclosure_url_encoded_and_escaped_once(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
+        monkeypatch.setenv("PUBLIC_BASE_URL", "https://example.com/feeds/")
+        pub_dir = tmp_path / "myshow"
+        pub_dir.mkdir()
+        (pub_dir / "Q&A #1?.mp3").write_bytes(b"\x00" * 64)
+        item = RSSGenerator()._build_episode_item(
+            "myshow",
+            {"file": "Q&A #1?.mp3", "title": "T", "guid": "g", "__resolved_path": pub_dir / "Q&A #1?.mp3"},
+            {"author-name": "Author"},
+        )
+        assert 'url="https://example.com/feeds/myshow/Q%26A%20%231%3F.mp3"' in item
+        assert "&amp;" not in item
+
+    def test_image_href_encoded(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
+        monkeypatch.setattr("podcastify.config.Config.BASE_URL", "http://localhost:8080")
+        pub_dir = tmp_path / "myshow"
+        pub_dir.mkdir()
+        (pub_dir / "Café & co.jpg").write_bytes(b"\x00" * 64)
+        channel = RSSGenerator()._build_channel_metadata(
+            "myshow",
+            {"title": "T", "image": "Café & co.jpg"},
+            "Mon, 01 Jan 2024 00:00:00 +0000",
+        )
+        assert '<itunes:image href="http://localhost:8080/myshow/Caf%C3%A9%20%26%20co.jpg"/>' in channel
+
+
 class TestFeedWellFormed:
     HOSTILE = 'Tom & "Jerry" <b>bold</b> it\'s ]]> café 日本語 🎙️\x01\x0b￾ end'
     CLEAN = 'Tom & "Jerry" <b>bold</b> it\'s ]]> café 日本語 🎙️ end'

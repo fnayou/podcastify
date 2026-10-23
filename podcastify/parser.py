@@ -2,6 +2,7 @@ import email.utils as eut
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
+from urllib.parse import quote
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
@@ -187,6 +188,10 @@ class EpisodeManager:
         return discovered
 
     @staticmethod
+    def media_url(podcast_name: str, file_name: str) -> str:
+        return f"{Config.BASE_URL}/{quote(podcast_name, safe='')}/{quote(file_name, safe='')}"
+
+    @staticmethod
     def resolve_image_url(podcast_name: str, meta: Dict[str, Any]) -> Optional[str]:
         img = meta.get("image")
         if not img:
@@ -196,6 +201,6 @@ class EpisodeManager:
         img_path = Config.PUBLIC_ROOT / podcast_name / Path(img).name
         if img_path.exists():
             logger.debug(f"Resolved image: {img_path.name}")
-            return f"{Config.BASE_URL}/{podcast_name}/{img_path.name}"
+            return EpisodeManager.media_url(podcast_name, img_path.name)
         logger.warning(f"Image file not found: {img_path}")
         return None

@@ -53,7 +53,43 @@ class TestDiscoverEpisodes:
         assert episodes[0]["__resolved_path"] == pub_dir / "episode.mp3"
 
 
+class TestMediaUrl:
+    def test_plain_name(self, monkeypatch):
+        monkeypatch.setattr("podcastify.config.Config.BASE_URL", "http://localhost:8080")
+        assert EpisodeManager.media_url("myshow", "ep01.mp3") == "http://localhost:8080/myshow/ep01.mp3"
+
+    def test_space_unicode_and_hash(self, monkeypatch):
+        monkeypatch.setattr("podcastify.config.Config.BASE_URL", "http://localhost:8080")
+        result = EpisodeManager.media_url("myshow", "Épisode 1 #2.mp3")
+        assert result == "http://localhost:8080/myshow/%C3%89pisode%201%20%232.mp3"
+
+    def test_question_mark(self, monkeypatch):
+        monkeypatch.setattr("podcastify.config.Config.BASE_URL", "http://localhost:8080")
+        assert EpisodeManager.media_url("myshow", "why?.mp3") == "http://localhost:8080/myshow/why%3F.mp3"
+
+    def test_percent_sign(self, monkeypatch):
+        monkeypatch.setattr("podcastify.config.Config.BASE_URL", "http://localhost:8080")
+        assert EpisodeManager.media_url("myshow", "100%.mp3") == "http://localhost:8080/myshow/100%25.mp3"
+
+    def test_podcast_segment_encoded(self, monkeypatch):
+        monkeypatch.setattr("podcastify.config.Config.BASE_URL", "http://localhost:8080")
+        assert EpisodeManager.media_url("my show", "a/b.mp3") == "http://localhost:8080/my%20show/a%2Fb.mp3"
+
+    def test_trailing_slash_base_url(self, monkeypatch):
+        monkeypatch.setenv("PUBLIC_BASE_URL", "https://cdn.example.com/")
+        assert EpisodeManager.media_url("myshow", "ep01.mp3") == "https://cdn.example.com/myshow/ep01.mp3"
+
+
 class TestResolveImageUrl:
+    def test_local_file_encoded(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
+        monkeypatch.setenv("PUBLIC_BASE_URL", " https://example.com/ ")
+        pub_dir = tmp_path / "myshow"
+        pub_dir.mkdir()
+        (pub_dir / "cover art #1.jpg").write_bytes(b"\x00" * 64)
+        result = EpisodeManager.resolve_image_url("myshow", {"image": "cover art #1.jpg"})
+        assert result == "https://example.com/myshow/cover%20art%20%231.jpg"
+
     def test_local_file_exists(self, tmp_path, monkeypatch):
         monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
         monkeypatch.setattr("podcastify.config.Config.BASE_URL", "http://localhost:8080")
