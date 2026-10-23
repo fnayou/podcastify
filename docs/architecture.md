@@ -48,7 +48,7 @@ Scans `./podcasts/` for files matching `<name>-podcast.yaml`. The `<name>` prefi
 ### Episode Discovery
 
 1. If `episodes:` is present in YAML, use the explicit list.
-2. Otherwise, auto-scan `public/<name>/` for `*.mp3` files.
+2. Otherwise, auto-scan `public/<name>/` for `.mp3`, `.m4a`, `.mp4`, `.ogg` and `.opus` files (case-insensitive).
 3. Sort by `pub_date` (if present) or file modification time, newest first.
 
 ### Duration Extraction
