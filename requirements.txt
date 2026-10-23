@@ -1,2 +1,6 @@
-PyYAML==6.0.2
-pydantic==2.11.5
+annotated-types==0.8.0
+pydantic==2.14.1
+pydantic-core==2.50.1
+PyYAML==6.0.3
+typing-extensions==4.16.0
+typing-inspection==0.4.4
