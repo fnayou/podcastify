@@ -17,19 +17,18 @@ tasks:
         [ -x .venv/bin/python ] && PY=.venv/bin/python
         $PY -m pytest tests/ --cov=podcastify --cov-report=term-missing --cov-fail-under=90 -v
 
-  test:ci:
-    desc: Run tests for CI (strict, no TTY)
+  setup:
+    desc: Create .venv, install runtime and dev requirements, and install git hooks
     cmds:
-      - |
-        PY=python3
-        [ -x .venv/bin/python ] && PY=.venv/bin/python
-        $PY -m pytest tests/ --cov=podcastify --cov-report=term-missing --cov-fail-under=90 --tb=short -q
+      - '[ -d .venv ] || python3 -m venv .venv'
+      - .venv/bin/python -m pip install -r requirements.txt -r requirements-dev.txt
+      - task: hooks
 
   validate:
     desc: Run coverage tests and quick Docker build
     cmds:
       - task: test:coverage
-      - task docker:build:quick
+      - task: :docker:build:quick
 
   hooks:
     desc: Install git hooks (Conventional Commits check on commit-msg)

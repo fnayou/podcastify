@@ -58,33 +58,8 @@ tasks:
         echo "Docker status:"
         {{.COMPOSE}} ps {{.SERVICE_NAME}} 2>/dev/null || echo "Service not running"
 
-  health:
-    desc: Run health check (info + compose status)
-    silent: true
-    cmds:
-      - |
-        echo "Health check"
-        echo "============"
-        task info
-        echo
-
-  version:
-    desc: Show tool and project file versions
-    silent: true
-    cmds:
-      - |
-        echo "Version information"
-        echo "==================="
-        task --version
-        docker --version
-        {{.COMPOSE}} version || true
-        echo
-        echo "Project files:"
-        test -f Taskfile.yml && echo "Taskfile.yml: OK" || echo "Taskfile.yml: missing"
-        test -f docker-compose.yml && echo "docker-compose.yml: OK" || echo "docker-compose.yml: missing"
-
   doctor:
-    desc: Check required tools and directories
+    desc: Check required tools, versions, directories and the compose file
     silent: true
     cmds:
       - |
@@ -93,6 +68,10 @@ tasks:
           command -v "$bin" >/dev/null 2>&1 || { echo "Missing: $bin"; ok=0; }
         done
         {{.COMPOSE}} version >/dev/null 2>&1 || { echo "Problem with docker compose"; ok=0; }
+        echo "task: $(task --version)"
+        echo "docker: $(docker --version 2>/dev/null || echo missing)"
+        echo "compose: $({{.COMPOSE}} version --short 2>/dev/null || echo missing)"
+        {{.COMPOSE}} config --quiet >/dev/null 2>&1 || { echo "Compose file: INVALID"; ok=0; }
         command -v ffprobe >/dev/null 2>&1 || echo "Note: ffprobe not on host (optional; used in container)"
         [ -d "{{.PUBLIC_DIR}}" ]   || { echo "Missing dir: {{.PUBLIC_DIR}}"; ok=0; }
         [ -d "{{.PODCASTS_DIR}}" ] || { echo "Missing dir: {{.PODCASTS_DIR}}"; ok=0; }
