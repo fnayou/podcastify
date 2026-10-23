@@ -13,6 +13,7 @@ services:
       - SERVICE_PORT
       - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://localhost:${HOST_PORT:-8080}}
       - RUN_ON_START
+      - GENERATE_INTERVAL
       - PUBLISH_XML
       - LOG_LEVEL
       # Set to the uid/gid that owns the bind-mounts below so generated

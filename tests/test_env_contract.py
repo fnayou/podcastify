@@ -56,7 +56,7 @@ class TestPathVariablesAreInternal:
 
 class TestComposeCarriesNoDuplicatedDefaults:
     @pytest.mark.parametrize(
-        "name", ["SERVICE_PORT", "RUN_ON_START", "PUBLISH_XML", "LOG_LEVEL", "PUID", "PGID"]
+        "name", ["SERVICE_PORT", "RUN_ON_START", "GENERATE_INTERVAL", "PUBLISH_XML", "LOG_LEVEL", "PUID", "PGID"]
     )
     def test_user_setting_is_a_bare_pass_through(self, name):
         assert re.search(rf"^\s+- {name}$", _read("docker-compose.yml"), re.M)

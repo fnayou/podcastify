@@ -29,6 +29,7 @@ The canonical environment contract is:
 | `PUID` | entrypoint, compose | `1000` | uid the container drops to when started as root |
 | `PGID` | entrypoint, compose | `1000` | gid the container drops to when started as root |
 | `RUN_ON_START` | generator, entrypoint | `true` | Run generator once at boot |
+| `GENERATE_INTERVAL` | entrypoint | `0` | Seconds between change checks of configs and media; `0` = off |
 | `PUBLISH_XML` | generator | `true` | Write `<name>.xml` (false = dry run) |
 | `LOG_LEVEL` | generator | `INFO` | `DEBUG`, `INFO`, `WARNING` or `ERROR` |
 
