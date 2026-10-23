@@ -41,10 +41,11 @@ migration note.
 - `Config.BASE_URL` reads `PUBLIC_BASE_URL`, not `BASE_URL`; KB/glossary must
   not call the env var "BASE_URL" (the *attribute* is `BASE_URL`, the *env key*
   is `PUBLIC_BASE_URL`).
-- Boolean env vars (`PUBLISH_XML`, `RUN_ON_START`) accept only `"true"`
-  (case-insensitive) via `Config`, which differs from YAML booleans parsed by
-  `_coerce_bool` (`true/yes/1/on`). This asymmetry is intentional for now and
-  documented here so it is not "fixed" accidentally.
+- Boolean env vars (`PUBLISH_XML`, `RUN_ON_START`) and YAML booleans share one
+  parser, `_coerce_bool` (`podcastify/config.py`): `true/yes/1/on` and
+  `false/no/0/off`, case-insensitive. Any other string is read as false and
+  logged as a warning. This replaces the earlier "only `true`" env rule. The
+  entrypoint still tests `RUN_ON_START` against the literal `true`.
 
 ## References
 
