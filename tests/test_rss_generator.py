@@ -8,6 +8,8 @@ import pytest
 
 from podcastify.rss import RSSGenerator
 
+PUBLISHED = datetime(2024, 1, 1, tzinfo=timezone.utc)
+
 
 class TestXmlEscape:
     def test_string(self):
@@ -67,7 +69,7 @@ class TestGenerateFeedXml:
         xml = gen.generate_feed_xml(
             "myshow",
             {"title": "My Show", "description": "Test", "language": "en", "author-name": "Author"},
-            [{"file": "ep01.mp3", "__resolved_path": pub_dir / "ep01.mp3"}],
+            [{"file": "ep01.mp3", "__resolved_path": pub_dir / "ep01.mp3", "__published": PUBLISHED}],
         )
         assert '<?xml version="1.0" encoding="UTF-8"?>' in xml
         assert '<rss version="2.0"' in xml
@@ -140,7 +142,7 @@ class TestGenerateFeedXml:
                 "file": "ep01.mp3",
                 "title": "Episode 1",
                 "description": "Desc",
-                "pub_date": "2024-01-01T00:00:00Z",
+                "__published": PUBLISHED,
                 "explicit": True,
                 "season": 1,
                 "episode": 2,
@@ -159,6 +161,7 @@ class TestGenerateFeedXml:
         assert "<itunes:season>1</itunes:season>" in item
         assert "<itunes:episode>2</itunes:episode>" in item
         assert "<itunes:episodeType>full</itunes:episodeType>" in item
+        assert "<pubDate>Mon, 01 Jan 2024 00:00:00 +0000</pubDate>" in item
 
     def test_episode_defaults(self, tmp_path, monkeypatch):
         monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
@@ -169,7 +172,7 @@ class TestGenerateFeedXml:
         gen = RSSGenerator()
         item = gen._build_episode_item(
             "myshow",
-            {"file": "ep01.mp3", "__resolved_path": pub_dir / "ep01.mp3"},
+            {"file": "ep01.mp3", "__resolved_path": pub_dir / "ep01.mp3", "__published": PUBLISHED},
             {"author-name": "Author", "explicit": False},
         )
         assert "<title>ep01</title>" in item  # stem of filename
@@ -190,7 +193,13 @@ class TestMediaUrls:
         (pub_dir / "Q&A #1?.mp3").write_bytes(b"\x00" * 64)
         item = RSSGenerator()._build_episode_item(
             "myshow",
-            {"file": "Q&A #1?.mp3", "title": "T", "guid": "g", "__resolved_path": pub_dir / "Q&A #1?.mp3"},
+            {
+                "file": "Q&A #1?.mp3",
+                "title": "T",
+                "guid": "g",
+                "__resolved_path": pub_dir / "Q&A #1?.mp3",
+                "__published": PUBLISHED,
+            },
             {"author-name": "Author"},
         )
         assert 'url="https://example.com/feeds/myshow/Q%26A%20%231%3F.mp3"' in item
@@ -249,6 +258,7 @@ class TestFeedWellFormed:
                     "guid": self.HOSTILE,
                     "duration_hms": self.HOSTILE,
                     "__resolved_path": pub_dir / "ep01.mp3",
+                    "__published": PUBLISHED,
                 }
             ],
         )

@@ -48,6 +48,30 @@ class TestMain:
         assert main(["generate", "--dry-run"]) == 0
         assert not (tmp_path / "myshow.xml").exists()
 
+    def test_unquoted_pub_dates_sort_and_render_consistently(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("podcastify.config.Config.PODCASTS_ROOT", tmp_path)
+        monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
+        monkeypatch.setattr("podcastify.config.Config.PUBLISH_XML", True)
+        (tmp_path / "myshow-podcast.yaml").write_text(
+            "title: My Show\n"
+            "description: D\n"
+            "episodes:\n"
+            "  - {file: a.mp3, title: Old, pub_date: 2025-01-01}\n"
+            "  - {file: b.mp3, title: New, pub_date: 2025-03-01T08:00:00}\n"
+            "  - {file: c.mp3, title: Mid, pub_date: '2025-02-01T08:00:00+02:00'}\n",
+            encoding="utf-8",
+        )
+        pub = tmp_path / "myshow"
+        pub.mkdir()
+        for name in ("a", "b", "c"):
+            (pub / f"{name}.mp3").write_bytes(b"\x00" * 64)
+        assert main(["generate"]) == 0
+        xml = (tmp_path / "myshow.xml").read_text(encoding="utf-8")
+        assert xml.index("<title>New</title>") < xml.index("<title>Mid</title>") < xml.index("<title>Old</title>")
+        assert "<pubDate>Sat, 01 Mar 2025 08:00:00 +0000</pubDate>" in xml
+        assert "<pubDate>Sat, 01 Feb 2025 06:00:00 +0000</pubDate>" in xml
+        assert "<pubDate>Wed, 01 Jan 2025 00:00:00 +0000</pubDate>" in xml
+
     def test_no_configs_exits_zero(self, tmp_path, monkeypatch):
         monkeypatch.setattr("podcastify.config.Config.PODCASTS_ROOT", tmp_path)
         monkeypatch.setattr("podcastify.config.Config.RUN_ON_START", True)

@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """Tests for EpisodeManager class."""
 
+import os
+from datetime import datetime, timezone
+
 from podcastify.config import Config
-from podcastify.parser import EpisodeManager
+from podcastify.parser import EpisodeManager, validate_podcast_config
 
 
 class TestDiscoverEpisodes:
@@ -51,6 +54,52 @@ class TestDiscoverEpisodes:
         # original file value stays as-is; only __resolved_path uses basename
         assert episodes[0]["file"] == "/some/path/episode.mp3"
         assert episodes[0]["__resolved_path"] == pub_dir / "episode.mp3"
+
+
+class TestPublished:
+    def _validated(self, episodes):
+        model, err = validate_podcast_config(
+            {"title": "T", "description": "D", "episodes": episodes}
+        )
+        assert err is None
+        return model
+
+    def test_pub_date_wins(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
+        pub_dir = tmp_path / "myshow"
+        pub_dir.mkdir()
+        (pub_dir / "ep.mp3").write_bytes(b"\x00")
+        model = self._validated([{"file": "ep.mp3", "pub_date": "2025-01-01T08:00:00"}])
+        episodes = EpisodeManager.discover_episodes("myshow", {}, model)
+        assert episodes[0]["__published"] == datetime(2025, 1, 1, 8, tzinfo=timezone.utc)
+
+    def test_mtime_fallback(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
+        pub_dir = tmp_path / "myshow"
+        pub_dir.mkdir()
+        mp3 = pub_dir / "ep.mp3"
+        mp3.write_bytes(b"\x00")
+        os.utime(mp3, (1700000000, 1700000000))
+        model = self._validated([{"file": "ep.mp3"}])
+        episodes = EpisodeManager.discover_episodes("myshow", {}, model)
+        assert episodes[0]["__published"] == datetime.fromtimestamp(1700000000, tz=timezone.utc)
+
+    def test_auto_scan_uses_mtime(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
+        pub_dir = tmp_path / "myshow"
+        pub_dir.mkdir()
+        mp3 = pub_dir / "ep.mp3"
+        mp3.write_bytes(b"\x00")
+        os.utime(mp3, (1700000000, 1700000000))
+        episodes = EpisodeManager.discover_episodes("myshow", {})
+        assert episodes[0]["__published"] == datetime.fromtimestamp(1700000000, tz=timezone.utc)
+
+    def test_missing_file_falls_back_to_epoch(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
+        (tmp_path / "myshow").mkdir()
+        model = self._validated([{"file": "gone.mp3"}])
+        episodes = EpisodeManager.discover_episodes("myshow", {}, model)
+        assert episodes[0]["__published"] == datetime.fromtimestamp(0, tz=timezone.utc)
 
 
 class TestMediaUrl:
