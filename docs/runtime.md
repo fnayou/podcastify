@@ -24,9 +24,9 @@ Since the base image `python:3.12-alpine3.22` already pins the Alpine version an
 
 ### Tini as PID 1, Caddy in the foreground
 
-Caddy is the only long-running process (the generator runs once at boot), so it
-runs in the foreground under `tini` — no supervisor. `tini` is PID 1 for the
-whole container life: the image entrypoint is
+Caddy runs in the foreground under `tini` — no supervisor. The generator runs
+once at boot, plus the optional background watcher described below. `tini` is
+PID 1 for the whole container life: the image entrypoint is
 `["/sbin/tini", "--", "/entrypoint.sh"]`, and the script ends with:
 
 ```bash
@@ -40,6 +40,28 @@ ffprobe children are reaped by `subprocess.run` itself.
 
 `RUN_ON_START` is read case-insensitively by the entrypoint, with the same
 values as the generator: `true/yes/1/on` run the generator at boot.
+
+### Automatic regeneration
+
+With `GENERATE_INTERVAL` set to a whole number of seconds above `0`, the
+entrypoint starts `app.py watch --interval <seconds>` in the background under
+the same `$RUNAS`, then `exec`s Caddy. Every interval the watcher compares a
+fingerprint of the configs (`PODCASTS_ROOT/*-podcast.yaml`) and the media
+(`PUBLIC_ROOT/<name>/*` with a known media extension): path, size and mtime.
+When it changes, the watcher regenerates every feed. Polling needs no extra
+package and works on SMB/NFS and Docker Desktop bind mounts, where inotify does
+not fire. The default `0` turns it off; any other value warns and turns it off.
+
+The watcher starts from the state left by the boot generation and only acts on
+later changes. If the boot generation exited non-zero, the watcher starts with
+`--initial-run` and regenerates on its first check, so a failed boot run is
+retried and logged again rather than hidden. A failed regeneration logs an
+error and waits for the next change. The watcher is a child of `tini`, which
+reaps it; it stops with the container when Caddy exits.
+
+The generator writes `<name>.xml` only when its content differs from the file
+on disk, ignoring `<lastBuildDate>`. An unchanged feed keeps its file and
+mtime, so podcast clients do not refetch it.
 
 ### Non-root via PUID/PGID
 

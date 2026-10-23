@@ -71,6 +71,7 @@ services:
       - SERVICE_PORT
       - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://localhost:${HOST_PORT:-8080}}
       - RUN_ON_START
+      - GENERATE_INTERVAL
       - PUBLISH_XML
       - LOG_LEVEL
       - PUID
@@ -280,7 +281,9 @@ task doctor                   # tools, versions, directories, compose file
 ## How it works
 
 - On `task docker:up`, the container starts Caddy and optionally runs the generator at boot (`RUN_ON_START=true`).
+- Set `GENERATE_INTERVAL` to a number of seconds and the container regenerates feeds when configs or media change, without a restart. The default `0` turns it off.
 - You can run the generator any time with `task podcastify:generate`.
+- A feed file is rewritten only when its content changes; `<lastBuildDate>` alone does not count.
 - The XML `<generator>` tag is `podcastify`.
 - Episode GUIDs default to a SHA-1 of `<podcast>/<filename>` and are not permalinks.
 

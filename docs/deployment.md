@@ -30,6 +30,7 @@ services:
       - SERVICE_PORT
       - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://localhost:${HOST_PORT:-8080}}
       - RUN_ON_START
+      - GENERATE_INTERVAL
       - PUBLISH_XML
       - LOG_LEVEL
       - PUID
@@ -48,6 +49,7 @@ HOST_PORT=8080
 SERVICE_PORT=8080
 PUBLIC_BASE_URL=http://localhost:${HOST_PORT}
 RUN_ON_START=true
+GENERATE_INTERVAL=0
 PUBLISH_XML=true
 LOG_LEVEL=INFO
 PUID=1000
@@ -64,6 +66,7 @@ PGID=1000
 | `PUID` | `1000` | uid the container drops to when started as root. Match the owner of the bind-mounts. |
 | `PGID` | `1000` | gid the container drops to when started as root. |
 | `RUN_ON_START` | `true` | Run generator on container startup. Accepts `true/yes/1/on`, case-insensitive; any other value skips it. |
+| `GENERATE_INTERVAL` | `0` | Seconds between checks for new or changed configs and media; on a change, feeds are regenerated without a restart. `0` turns it off. Polls, so it works on network and Docker Desktop bind mounts. See [runtime](runtime.md#automatic-regeneration). |
 | `PUBLISH_XML` | `true` | Write XML files to disk. Accepts `true/yes/1/on` and `false/no/0/off`; other values warn and count as false. |
 | `LOG_LEVEL` | `INFO` | Logging verbosity: `DEBUG`, `INFO`, `WARNING`, or `ERROR`. |
 
@@ -78,11 +81,12 @@ The podcastify generator logs at different levels. The visibility depends on how
 | How generator runs | In `docker compose logs -f`? | Why |
 |---|---|---|
 | Boot, `RUN_ON_START=true` | YES | `entrypoint.sh` runs the generator under `tini` (PID 1) before `exec`-ing Caddy; stdout is inherited by the container |
+| Watcher, `GENERATE_INTERVAL` above `0` | YES | `entrypoint.sh` starts it in the background before `exec`-ing Caddy; stdout is inherited by the container |
 | Caddy | YES | Caddy runs in the foreground under `tini` and logs to stdout |
 | `docker compose exec podcastify /entrypoint.sh generate` | NO | separate process attached to the exec client's terminal, not PID 1 — prints in your shell. Runs as `PUID`/`PGID` like the boot run, so files are never root-owned |
 | `docker compose run --rm podcastify generate` | NO | separate temporary container, its own log stream |
 
-**Note**: On-demand `exec` generation will not show in the main service log stream. Check your shell terminal for the output, or re-run the generator at boot by restarting the container.
+**Note**: On-demand `exec` generation will not show in the main service log stream. Check your shell terminal for the output, re-run the generator at boot by restarting the container, or set `GENERATE_INTERVAL` so new episodes are picked up automatically.
 
 ## Reverse Proxy
 
