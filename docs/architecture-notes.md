@@ -52,4 +52,9 @@ not covered there. Read both before proposing changes to `podcastify/`.
 - **Pipeline**: `PodcastProcessor.process_podcast` (cli.py) — load YAML →
   pydantic validate → extract metadata → require `public/<name>/` to exist →
   discover episodes → warm duration cache in parallel → sort → generate XML →
-  atomic write (or skip write if `PUBLISH_XML=false`).
+  atomic write (or skip write if `PUBLISH_XML=false` or `--dry-run`).
+- **CLI and exit codes**: `main(argv)` (cli.py) parses with `argparse`:
+  `app.py [generate [--dry-run]]`. With `RUN_ON_START=true` the generator
+  also runs when no subcommand is given. Exit `0` when every config succeeded
+  or none exist, `1` when any config failed, `2` for a usage error (argparse).
+  The entrypoint only warns on a non-zero exit.
