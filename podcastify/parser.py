@@ -202,11 +202,13 @@ class EpisodeManager:
             return []
 
         discovered = []
-        for mp3 in sorted(pub_dir.glob("*.mp3")):
+        for media in sorted(pub_dir.iterdir()):
+            if media.suffix.lower() not in Config.MEDIA_TYPES or not media.is_file():
+                continue
             ep = {
-                "file": mp3.name,
-                "title": mp3.stem,
-                "__resolved_path": mp3,
+                "file": media.name,
+                "title": media.stem,
+                "__resolved_path": media,
             }
             ep["__published"] = EpisodeManager._published(ep)
             discovered.append(ep)
@@ -222,6 +224,10 @@ class EpisodeManager:
         except OSError:
             mtime = 0.0
         return datetime.fromtimestamp(mtime, tz=timezone.utc)
+
+    @staticmethod
+    def media_type(path: Path) -> str:
+        return Config.MEDIA_TYPES.get(path.suffix.lower(), Config.DEFAULT_MEDIA_TYPE)
 
     @staticmethod
     def media_url(podcast_name: str, file_name: str) -> str:

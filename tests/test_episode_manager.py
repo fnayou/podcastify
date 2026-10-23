@@ -3,6 +3,9 @@
 
 import os
 from datetime import datetime, timezone
+from pathlib import Path
+
+import pytest
 
 from podcastify.config import Config
 from podcastify.parser import EpisodeManager, validate_podcast_config
@@ -54,6 +57,55 @@ class TestDiscoverEpisodes:
         # original file value stays as-is; only __resolved_path uses basename
         assert episodes[0]["file"] == "/some/path/episode.mp3"
         assert episodes[0]["__resolved_path"] == pub_dir / "episode.mp3"
+
+
+class TestMediaScan:
+    @pytest.mark.parametrize("name", ["a.mp3", "a.m4a", "a.mp4", "a.ogg", "a.opus", "EP01.MP3", "a.M4A"])
+    def test_supported_extensions_are_found(self, tmp_path, monkeypatch, name):
+        monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
+        pub_dir = tmp_path / "myshow"
+        pub_dir.mkdir()
+        (pub_dir / name).write_bytes(b"\x00")
+        episodes = EpisodeManager.discover_episodes("myshow", {})
+        assert [e["file"] for e in episodes] == [name]
+
+    def test_other_files_and_directories_are_ignored(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
+        pub_dir = tmp_path / "myshow"
+        pub_dir.mkdir()
+        (pub_dir / "cover.jpg").write_bytes(b"\x00")
+        (pub_dir / "notes.txt").write_bytes(b"\x00")
+        (pub_dir / "folder.mp3").mkdir()
+        (pub_dir / "ep.mp3").write_bytes(b"\x00")
+        episodes = EpisodeManager.discover_episodes("myshow", {})
+        assert [e["file"] for e in episodes] == ["ep.mp3"]
+
+    def test_mixed_case_order_is_stable(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
+        pub_dir = tmp_path / "myshow"
+        pub_dir.mkdir()
+        for name in ("b.mp3", "A.MP3", "c.mp3"):
+            (pub_dir / name).write_bytes(b"\x00")
+        episodes = EpisodeManager.discover_episodes("myshow", {})
+        assert [e["file"] for e in episodes] == ["A.MP3", "b.mp3", "c.mp3"]
+
+
+class TestMediaType:
+    @pytest.mark.parametrize(
+        "name, expected",
+        [
+            ("a.mp3", "audio/mpeg"),
+            ("a.MP3", "audio/mpeg"),
+            ("a.m4a", "audio/x-m4a"),
+            ("a.mp4", "video/mp4"),
+            ("a.ogg", "audio/ogg"),
+            ("a.opus", "audio/opus"),
+            ("a.wav", "audio/mpeg"),
+            ("noext", "audio/mpeg"),
+        ],
+    )
+    def test_media_type(self, name, expected):
+        assert EpisodeManager.media_type(Path(name)) == expected
 
 
 class TestPublished:
