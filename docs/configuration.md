@@ -94,7 +94,7 @@ episodes:
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `file` | string | Yes | Media filename: `.mp3`, `.m4a`, `.mp4`, `.ogg` or `.opus` (basename only, placed in `public/<name>/`). |
+| `file` | string | Yes | Media filename: `.mp3`, `.m4a`, `.mp4`, `.ogg` or `.opus` (basename only, placed in `public/<name>/`). Empty, `.` and `..` are rejected, and so is a second entry with the same basename. |
 | `title` | string | No | Episode title. Defaults to the filename stem. |
 | `description` | string | No | Episode description. |
 | `summary` | string | No | Longer summary. Falls back to `description`. |
@@ -106,7 +106,7 @@ episodes:
 | `season` | integer | No | Season number. |
 | `episode` | integer | No | Episode number within season. |
 | `episode_type` | string | No | `full`, `trailer`, or `bonus`. |
-| `guid` | string | No | Unique identifier. Defaults to SHA-1 of `<podcast>/<filename>`. |
+| `guid` | string | No | Unique identifier. Defaults to SHA-1 of `<podcast>/<filename>`. Must be unique within the podcast; a duplicate rejects the whole config. |
 | `duration_hms` | string | No | Pre-set duration as `H:MM:SS` or `M:SS`. If omitted, extracted via `ffprobe`. |
 
 ## File Placement
