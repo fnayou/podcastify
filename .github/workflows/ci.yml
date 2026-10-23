@@ -3,6 +3,9 @@ on:
   pull_request:
     branches:
       - main
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -16,29 +19,53 @@ env:
   IMAGE_NAME: fnayou/podcastify
 
 jobs:
+  tests:
+    uses: ./.github/workflows/test.yml
+
   test:
+    needs: [tests]
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
+    steps:
+      - name: Require tests to pass
+        env:
+          RESULT: ${{ needs.tests.result }}
+        run: test "$RESULT" = success
+
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      docker: ${{ steps.filter.outputs.docker }}
     steps:
       - name: Checkout
+        if: github.event_name == 'pull_request'
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-
-      - name: Set up Python
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
-          python-version: "3.12"
-          cache: pip
+          fetch-depth: 2
 
-      - name: Install dependencies
+      - name: Detect docs-only changes
+        id: filter
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
         run: |
-          pip install -r requirements.txt
-          pip install -r requirements-dev.txt
-
-      - name: Run tests
-        run: python -m pytest tests/ --cov=podcastify --cov-report=term-missing --cov-fail-under=90 --tb=short -q
+          docker=true
+          if [ "$EVENT_NAME" = pull_request ]; then
+            docker=false
+            while IFS= read -r f; do
+              case "$f" in
+                docs/*|*.md|.github/ISSUE_TEMPLATE/*) ;;
+                *) docker=true ;;
+              esac
+            done <<< "$(git diff --name-only HEAD^1 HEAD)"
+          fi
+          echo "docker=${docker}" >> "$GITHUB_OUTPUT"
 
   docker:
-    needs: [test]
+    needs: [changes]
+    if: ${{ !cancelled() && needs.changes.outputs.docker != 'false' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
