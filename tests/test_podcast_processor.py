@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Tests for PodcastProcessor class."""
 
+import os
+import time
+
 import yaml
 
 from podcastify.cli import PodcastProcessor
@@ -334,3 +337,110 @@ class TestProcessAllPodcasts:
         failed = proc.process_all_podcasts()
         assert failed == 1
         assert any("1/2 successful" in record.message for record in caplog.records)
+
+
+def _setup_show(tmp_path, monkeypatch):
+    monkeypatch.setattr("podcastify.config.Config.PODCASTS_ROOT", tmp_path)
+    monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
+    monkeypatch.setattr("podcastify.config.Config.PUBLISH_XML", True)
+    cfg = tmp_path / "myshow-podcast.yaml"
+    cfg.write_text(
+        yaml.safe_dump({"title": "T", "description": "D", "episodes": [{"file": "ep.mp3"}]}),
+        encoding="utf-8",
+    )
+    pub = tmp_path / "myshow"
+    pub.mkdir()
+    (pub / "ep.mp3").write_bytes(b"\x00" * 64)
+    return cfg
+
+
+class TestAtomicWrite:
+    def test_temp_file_is_hidden_and_synced_before_replace(self, tmp_path, monkeypatch, mocker):
+        cfg = _setup_show(tmp_path, monkeypatch)
+        events = []
+        real_replace = os.replace
+        real_fsync = os.fsync
+
+        def fake_fsync(fd):
+            events.append(("fsync", None))
+            real_fsync(fd)
+
+        def fake_replace(src, dst):
+            if str(dst).endswith(".xml"):
+                events.append(("replace", os.path.basename(src)))
+            real_replace(src, dst)
+
+        mocker.patch("podcastify.cli.os.fsync", side_effect=fake_fsync)
+        mocker.patch("podcastify.cli.os.replace", side_effect=fake_replace)
+        assert PodcastProcessor().process_podcast("myshow", cfg) is True
+        assert [e[0] for e in events] == ["fsync", "replace"]
+        temp_name = events[1][1]
+        assert temp_name.startswith(".myshow.")
+        assert temp_name.endswith(".xml.tmp")
+        assert (tmp_path / "myshow.xml").exists()
+        assert not [p for p in tmp_path.iterdir() if p.name.endswith(".tmp")]
+
+    def test_temp_file_removed_when_replace_fails(self, tmp_path, monkeypatch, mocker):
+        cfg = _setup_show(tmp_path, monkeypatch)
+        mocker.patch("podcastify.cli.os.replace", side_effect=OSError("disk gone"))
+        assert PodcastProcessor().process_podcast("myshow", cfg) is False
+        assert not [p for p in tmp_path.iterdir() if p.name.endswith(".tmp")]
+        assert not (tmp_path / "myshow.xml").exists()
+
+
+class TestStaleTempFiles:
+    def _age(self, path, seconds):
+        old = time.time() - seconds
+        os.utime(path, (old, old))
+
+    def test_old_temp_files_are_removed_at_start(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("podcastify.config.Config.PODCASTS_ROOT", tmp_path / "none")
+        monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
+        stale = tmp_path / ".myshow.abc123.xml.tmp"
+        fresh = tmp_path / ".other.def456.xml.tmp"
+        user_hidden = tmp_path / ".notes.xml"
+        feed = tmp_path / "myshow.xml"
+        for p in (stale, fresh, user_hidden, feed):
+            p.write_text("x", encoding="utf-8")
+        self._age(stale, 3600)
+        self._age(user_hidden, 3600)
+        self._age(feed, 3600)
+        PodcastProcessor().process_all_podcasts()
+        assert not stale.exists()
+        assert fresh.exists()
+        assert user_hidden.exists()
+        assert feed.exists()
+
+    def test_dry_run_keeps_old_temp_files(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("podcastify.config.Config.PODCASTS_ROOT", tmp_path / "none")
+        monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
+        stale = tmp_path / ".myshow.abc123.xml.tmp"
+        stale.write_text("x", encoding="utf-8")
+        self._age(stale, 3600)
+        PodcastProcessor(dry_run=True).process_all_podcasts()
+        assert stale.exists()
+
+    def test_publishing_disabled_keeps_old_temp_files(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("podcastify.config.Config.PODCASTS_ROOT", tmp_path / "none")
+        monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
+        monkeypatch.setattr("podcastify.config.Config.PUBLISH_XML", False)
+        stale = tmp_path / ".myshow.abc123.xml.tmp"
+        stale.write_text("x", encoding="utf-8")
+        self._age(stale, 3600)
+        PodcastProcessor().process_all_podcasts()
+        assert stale.exists()
+
+    def test_missing_public_root_is_fine(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("podcastify.config.Config.PODCASTS_ROOT", tmp_path / "none")
+        monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path / "missing")
+        assert PodcastProcessor().process_all_podcasts() == 0
+
+    def test_unremovable_temp_file_only_warns(self, tmp_path, monkeypatch, mocker, caplog):
+        monkeypatch.setattr("podcastify.config.Config.PODCASTS_ROOT", tmp_path / "none")
+        monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
+        stale = tmp_path / ".myshow.abc123.xml.tmp"
+        stale.write_text("x", encoding="utf-8")
+        self._age(stale, 3600)
+        mocker.patch("pathlib.Path.unlink", side_effect=OSError("denied"))
+        assert PodcastProcessor().process_all_podcasts() == 0
+        assert any("denied" in r.message and r.levelname == "WARNING" for r in caplog.records)

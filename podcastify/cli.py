@@ -2,6 +2,7 @@ import argparse
 import logging
 import os
 import tempfile
+import time
 from pathlib import Path
 from typing import Any, Dict, Optional, Sequence
 
@@ -19,6 +20,9 @@ logger = logging.getLogger(__name__)
 
 
 class PodcastProcessor:
+    TEMP_SUFFIX = ".xml.tmp"
+    STALE_TEMP_AGE_SECONDS = 600
+
     def __init__(self, dry_run: bool = False):
         self.dry_run = dry_run
         self.config_manager = ConfigurationManager()
@@ -108,10 +112,16 @@ class PodcastProcessor:
                 xml = self.rss_generator.generate_feed_xml(podcast_name, meta, episodes)
                 out = Config.PUBLIC_ROOT / f"{podcast_name}.xml"
                 logger.debug(f"Write path: {out}, bytes: {len(xml)}")
-                fd, tmp = tempfile.mkstemp(dir=str(Config.PUBLIC_ROOT), suffix=".xml")
+                fd, tmp = tempfile.mkstemp(
+                    dir=str(Config.PUBLIC_ROOT),
+                    prefix=f".{podcast_name}.",
+                    suffix=self.TEMP_SUFFIX,
+                )
                 try:
                     with os.fdopen(fd, "w", encoding="utf-8") as f:
                         f.write(xml)
+                        f.flush()
+                        os.fsync(f.fileno())
                     # mkstemp creates 0600; feeds are public static files served
                     # by Caddy, so make them world-readable.
                     os.chmod(tmp, 0o644)
@@ -133,7 +143,20 @@ class PodcastProcessor:
             logger.exception(f"Failed to process {podcast_name}: {e}")
             return False
 
+    def remove_stale_temp_files(self) -> None:
+        if self.dry_run or not Config.PUBLISH_XML or not Config.PUBLIC_ROOT.is_dir():
+            return
+        cutoff = time.time() - self.STALE_TEMP_AGE_SECONDS
+        for tmp in Config.PUBLIC_ROOT.glob(f".*{self.TEMP_SUFFIX}"):
+            try:
+                if tmp.is_file() and tmp.stat().st_mtime < cutoff:
+                    tmp.unlink()
+                    logger.info(f"Removed stale temp file {tmp.name}")
+            except OSError as e:
+                logger.warning(f"Could not remove stale temp file {tmp.name}: {e}")
+
     def process_all_podcasts(self) -> int:
+        self.remove_stale_temp_files()
         configs = self.config_manager.discover_podcast_configs()
         if not configs:
             logger.info("No podcast configurations found")
