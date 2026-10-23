@@ -14,6 +14,7 @@ logger = get_logger(__name__)
 class MediaProcessor:
     _duration_cache: Dict[Tuple[str, float], Optional[float]] = {}
     _disk_loaded = False
+    _ffprobe_missing_warned = False
     # Guards _duration_cache against concurrent mutation/iteration when
     # warm_durations_parallel runs probes across a ThreadPoolExecutor.
     _lock = threading.Lock()
@@ -98,9 +99,18 @@ class MediaProcessor:
     def clear_cache(cls) -> None:
         cls._duration_cache.clear()
         cls._disk_loaded = False
+        cls._ffprobe_missing_warned = False
         path = cls._cache_path()
         if path.exists():
             path.unlink(missing_ok=True)
+
+    @classmethod
+    def _warn_ffprobe_missing(cls) -> None:
+        with cls._lock:
+            if cls._ffprobe_missing_warned:
+                return
+            cls._ffprobe_missing_warned = True
+        logger.warning("ffprobe not found; publishing feeds without episode durations")
 
     @classmethod
     def _cache_failure(cls, key: Tuple[str, float], persist: bool = True) -> None:
@@ -169,6 +179,9 @@ class MediaProcessor:
                 cls._save_disk_cache()
             logger.debug(f"Resolved duration: {mp3_path.name} -> {dur}s")
             return dur
+        except FileNotFoundError:
+            cls._warn_ffprobe_missing()
+            return None
         except subprocess.CalledProcessError as e:
             stderr_msg = e.stderr.strip() if e.stderr else "<no stderr>"
             logger.warning(f"Failed to get duration for {mp3_path.name}: <exit {e.returncode}> ffprobe: {stderr_msg}")
