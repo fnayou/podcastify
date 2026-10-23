@@ -1,0 +1,47 @@
+# git-cliff configuration for the GitHub Release notes (ADR 0007).
+# Run through `task release:changelog` locally and by release.yml in CI.
+# The <!-- N --> prefixes fix the order of the groups; the template strips them.
+# Breaking commits (`!` or a BREAKING CHANGE: footer) are listed first and only
+# once, whatever their type; protect_breaking_commits keeps the hidden types.
+
+[changelog]
+header = ""
+footer = ""
+trim = true
+body = """
+{% set breaking = commits | filter(attribute="breaking", value=true) %}\
+{% if breaking | length > 0 %}\
+### Breaking Changes
+{% for commit in breaking %}\
+- {% if commit.scope %}**{{ commit.scope }}:** {% endif %}{{ commit.message | upper_first }} ({{ commit.id | truncate(length=7, end="") }})\
+{% if commit.breaking_description and commit.breaking_description != commit.message %} - {{ commit.breaking_description }}{% endif %}
+{% endfor %}
+{% endif %}\
+{% for group, commits in commits | filter(attribute="breaking", value=false) | group_by(attribute="group") %}\
+### {{ group | striptags | trim }}
+{% if group is containing("Dependencies") %}\
+- {% for commit in commits %}{{ commit.message | upper_first }} ({{ commit.id | truncate(length=7, end="") }}){% if not loop.last %}; {% endif %}{% endfor %}
+{% else %}\
+{% for commit in commits %}\
+- {% if commit.scope %}**{{ commit.scope }}:** {% endif %}{{ commit.message | upper_first }} ({{ commit.id | truncate(length=7, end="") }})
+{% endfor %}\
+{% endif %}
+{% endfor %}
+"""
+
+[git]
+conventional_commits = true
+filter_unconventional = true
+protect_breaking_commits = true
+sort_commits = "oldest"
+tag_pattern = "^v20[0-9]{2}\\.[0-9]+\\.[0-9]+(-.*)?$"
+commit_parsers = [
+  { message = "^Merge ", skip = true },
+  { message = "^(build|ci|chore)\\(deps\\)", group = "<!-- 6 -->Dependencies" },
+  { message = "^feat(\\(.+\\))?!?:", group = "<!-- 1 -->Features" },
+  { message = "^fix(\\(.+\\))?!?:", group = "<!-- 2 -->Bug Fixes" },
+  { message = "^perf(\\(.+\\))?!?:", group = "<!-- 3 -->Performance" },
+  { message = "^build(\\(.+\\))?!?:", group = "<!-- 4 -->Build" },
+  { message = "^revert(\\(.+\\))?!?:", group = "<!-- 5 -->Reverts" },
+  { message = "^(ci|docs|chore|test|style|refactor)(\\(.+\\))?!?:", skip = true },
+]

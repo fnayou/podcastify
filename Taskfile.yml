@@ -20,6 +20,8 @@ includes:
     taskfile: ./tasks/worktree.yml
   ci:
     taskfile: ./tasks/ci.yml
+  release:
+    taskfile: ./tasks/release.yml
   devlocal:
     taskfile: ./Taskfile.dev.yml
     optional: true
