@@ -10,17 +10,17 @@ services:
       - "${HOST_PORT:-8080}:${SERVICE_PORT:-8080}"
 
     environment:
-      - SERVICE_PORT=${SERVICE_PORT:-8080}
+      - SERVICE_PORT
       - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://localhost:${HOST_PORT:-8080}}
-      - RUN_ON_START=${RUN_ON_START:-true}
-      - PUBLISH_XML=${PUBLISH_XML:-true}
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - RUN_ON_START
+      - PUBLISH_XML
+      - LOG_LEVEL
       # Set to the uid/gid that owns the bind-mounts below so generated
       # files aren't written as root. Defaults to 1000.
-      - PUID=${PUID:-1000}
-      - PGID=${PGID:-1000}
+      - PUID
+      - PGID
 
     volumes:
-      - ./public:/app/public:rw
-      - ./podcasts:/app/podcasts:rw
-      - ./cache:/app/.cache:rw
+      - ./public:/app/public
+      - ./podcasts:/app/podcasts
+      - ./cache:/app/.cache

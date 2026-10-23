@@ -19,7 +19,7 @@ def _adr_variables():
 
 
 def _compose_variables():
-    return set(re.findall(r"^\s+- ([A-Z_]+)=", _read("docker-compose.yml"), re.M))
+    return set(re.findall(r"^\s+- ([A-Z_]+)(?:=|$)", _read("docker-compose.yml"), re.M))
 
 
 def _env_example_variables():
@@ -52,6 +52,28 @@ class TestPathVariablesAreInternal:
         assert "Accepted" in text
         for name in PATH_VARS:
             assert name in text
+
+
+class TestComposeCarriesNoDuplicatedDefaults:
+    @pytest.mark.parametrize(
+        "name", ["SERVICE_PORT", "RUN_ON_START", "PUBLISH_XML", "LOG_LEVEL", "PUID", "PGID"]
+    )
+    def test_user_setting_is_a_bare_pass_through(self, name):
+        assert re.search(rf"^\s+- {name}$", _read("docker-compose.yml"), re.M)
+
+    def test_public_base_url_keeps_its_host_port_default(self):
+        assert "PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://localhost:${HOST_PORT:-8080}}" in _read(
+            "docker-compose.yml"
+        )
+
+    def test_volumes_have_no_redundant_rw_suffix(self):
+        assert ":rw" not in _read("docker-compose.yml")
+
+
+class TestProxyDocsShowLocalhostBinding:
+    @pytest.mark.parametrize("relative", ["docs/deployment.md", "README.md"])
+    def test_binding_is_shown(self, relative):
+        assert '"127.0.0.1:${HOST_PORT:-8080}:${SERVICE_PORT:-8080}"' in _read(relative)
 
 
 class TestSurfacesAgree:
