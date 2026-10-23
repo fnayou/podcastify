@@ -63,3 +63,9 @@ not covered there. Read both before proposing changes to `podcastify/`.
   also runs when no subcommand is given. Exit `0` when every config succeeded
   or none exist, `1` when any config failed, `2` for a usage error (argparse).
   The entrypoint only warns on a non-zero exit.
+- **Logging**: modules use `logging.getLogger(__name__)`. `main()` calls
+  `configure_logging()` (logging_config.py) once: two handlers on the
+  `podcastify` logger (WARNING+ to stderr, below to stdout), level from
+  `LOG_LEVEL` read at call time, `propagate=False` so a configured root logger
+  does not print every line twice. An unexpected error in `process_podcast`
+  is logged with `logger.exception`, so the traceback is kept.

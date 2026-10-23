@@ -69,8 +69,8 @@ PGID=1000
 | `CACHE_ROOT` | `/app/.cache` | In-container path to the ffprobe duration cache and Caddy state. Not served over HTTP. |
 | `PUID` | `1000` | uid the container drops to when started as root. Match the owner of the bind-mounts. |
 | `PGID` | `1000` | gid the container drops to when started as root. |
-| `RUN_ON_START` | `true` | Run generator on container startup. |
-| `PUBLISH_XML` | `true` | Write XML files to disk. |
+| `RUN_ON_START` | `true` | Run generator on container startup. The entrypoint tests the literal `true`. |
+| `PUBLISH_XML` | `true` | Write XML files to disk. Accepts `true/yes/1/on` and `false/no/0/off`; other values warn and count as false. |
 | `LOG_LEVEL` | `INFO` | Logging verbosity: `DEBUG`, `INFO`, `WARNING`, or `ERROR`. |
 
 ## Log Visibility
