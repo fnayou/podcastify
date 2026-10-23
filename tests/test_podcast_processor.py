@@ -8,7 +8,6 @@ from datetime import datetime, timezone
 import yaml
 
 from podcastify.cli import PodcastProcessor
-from podcastify.config import Config
 
 
 class TestProcessPodcast:

@@ -7,7 +7,6 @@ from pathlib import Path
 
 import pytest
 
-from podcastify.config import Config
 from podcastify.parser import EpisodeManager, validate_podcast_config
 
 

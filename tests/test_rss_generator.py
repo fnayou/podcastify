@@ -78,7 +78,7 @@ class TestGenerateFeedXml:
         assert "</rss>" in xml
 
     def test_channel_metadata(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_dir := tmp_path)
+        monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
         pub_dir = tmp_path / "myshow"
         pub_dir.mkdir()
         gen = RSSGenerator()
