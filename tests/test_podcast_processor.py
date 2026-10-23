@@ -3,6 +3,7 @@
 
 import os
 import time
+import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 
 import pytest
@@ -494,16 +495,27 @@ class TestStaleTempFiles:
 
 
 class TestEdgeCases:
-    def test_no_model_builds_empty_metadata(self):
-        assert PodcastProcessor()._build_metadata_from_model(None) == {}
-
-    def test_empty_metadata_fails_the_podcast(self, tmp_path, mocker, caplog):
+    def test_no_model_fails_the_podcast(self, tmp_path, mocker, caplog):
         cfg = tmp_path / "myshow-podcast.yaml"
         cfg.write_text(yaml.safe_dump({"title": "T", "description": "D"}), encoding="utf-8")
-        mocker.patch.object(PodcastProcessor, "_build_metadata_from_model", return_value={})
+        mocker.patch("podcastify.cli.validate_podcast_config", return_value=(None, None))
         assert PodcastProcessor().process_podcast("myshow", cfg) is False
         errors = [r.message for r in caplog.records if r.levelname == "ERROR"]
-        assert errors == ["Failed to build metadata for myshow"]
+        assert errors == ["Config validation failed for myshow: missing podcast configuration"]
+
+    def test_empty_channel_publishes_with_fallbacks(self, tmp_path, monkeypatch, caplog):
+        cfg = _setup_show(tmp_path, monkeypatch)
+        cfg.write_text(
+            yaml.safe_dump({"title": "", "description": "", "episodes": [{"file": "ep.mp3"}]}), encoding="utf-8"
+        )
+        assert PodcastProcessor().process_podcast("myshow", cfg) is True
+        channel = ET.fromstring((tmp_path / "myshow.xml").read_bytes()).find("channel")
+        assert channel.findtext("title") == "myshow"
+        assert channel.find("description").text is None
+        assert [r.levelname for r in caplog.records if r.levelname in ("WARNING", "ERROR")] == []
+        assert [r.message for r in caplog.records if r.levelname == "INFO"] == [
+            f"Published myshow: 1 episodes -> {tmp_path / 'myshow.xml'}"
+        ]
 
     @pytest.mark.parametrize("content", ["- a\n- b\n", "just a string\n", "42\n"])
     def test_non_mapping_config_fails_validation(self, tmp_path, caplog, content):
