@@ -14,6 +14,7 @@ concurrency:
 env:
   REGISTRY: docker.io
   IMAGE_NAME: fnayou/podcastify
+  IMAGE_DESCRIPTION: tiny self-hosted podcast RSS generator. Create private podcast feeds from your own MP3s with zero fuss.
 
 jobs:
   validate-tag:
@@ -116,7 +117,7 @@ jobs:
             type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
           labels: |
             org.opencontainers.image.title=podcastify
-            org.opencontainers.image.description=tiny self-hosted podcast RSS generator. Create private podcast feeds from your own MP3s with zero fuss.
+            org.opencontainers.image.description=${{ env.IMAGE_DESCRIPTION }}
             org.opencontainers.image.licenses=MIT
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.version=${{ steps.version.outputs.version }}
@@ -186,6 +187,18 @@ jobs:
           subject-digest: ${{ steps.build-push.outputs.digest }}
           push-to-registry: true
           create-storage-record: false
+
+      - name: Sync Docker Hub overview (stable releases, never blocks)
+        if: ${{ !contains(github.ref_name, '-') }}
+        continue-on-error: true
+        timeout-minutes: 5
+        uses: peter-evans/dockerhub-description@1b9a80c056b620d92cedb9d9b5a223409c68ddfa # v5.0.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: ${{ env.IMAGE_NAME }}
+          readme-filepath: README.md
+          short-description: ${{ env.IMAGE_DESCRIPTION }}
 
   release:
     runs-on: ubuntu-latest
