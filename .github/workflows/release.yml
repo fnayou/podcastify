@@ -34,9 +34,6 @@ jobs:
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
 
-      - name: Install ffmpeg
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
-
       - name: Run tests
         run: python -m pytest tests/ --cov=podcastify --cov-report=term-missing --cov-fail-under=90 --tb=short -q
 
