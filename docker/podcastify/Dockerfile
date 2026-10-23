@@ -8,6 +8,7 @@ FROM python:3.12-alpine3.22
 # System deps (keep small, versions pinned to alpine 3.22 stable).
 # `apk upgrade` patches base OS packages (e.g. openssl 3.5.6-r0 -> 3.5.7-r0).
 # su-exec: drop from root to PUID/PGID at runtime (entrypoint).
+# hadolint ignore=DL3018
 RUN apk upgrade --no-cache && apk add --no-cache \
     ffmpeg \
     tini \
@@ -60,6 +61,6 @@ ENV SERVICE_PORT=8080 \
 
 EXPOSE 8080
 
-HEALTHCHECK --interval=30s --timeout=3s --start-period=120s CMD wget -q --spider http://127.0.0.1:${SERVICE_PORT}/healthz || exit 1
+HEALTHCHECK --interval=30s --timeout=3s --start-period=120s CMD ["/bin/sh", "-c", "wget -q --spider http://127.0.0.1:${SERVICE_PORT}/healthz || exit 1"]
 
 ENTRYPOINT ["/sbin/tini", "--", "/entrypoint.sh"]
