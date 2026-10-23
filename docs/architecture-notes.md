@@ -60,10 +60,17 @@ not covered there. Read both before proposing changes to `podcastify/`.
 - **Pipeline**: `PodcastProcessor.process_podcast` (cli.py) — load YAML →
   pydantic validate → extract metadata → require `public/<name>/` to exist →
   discover episodes → warm duration cache in parallel → sort → generate XML →
-  atomic write (or skip write if `PUBLISH_XML=false` or `--dry-run`).
+  atomic write (or skip write if `PUBLISH_XML=false` or `--dry-run`, or if
+  the XML matches the file on disk once `<lastBuildDate>` is ignored).
+- **Watcher**: `FeedWatcher` (cli.py) polls a fingerprint (path, size,
+  mtime_ns) of `*-podcast.yaml` configs and `public/<name>/` media every
+  `--interval` seconds and runs `process_all_podcasts()` on a change. The
+  baseline is the state at start, or none with `--initial-run`. The
+  entrypoint starts it in the background when `GENERATE_INTERVAL` is above 0.
 - **CLI and exit codes**: `main(argv)` (cli.py) parses with `argparse`:
-  `app.py [generate [--dry-run]]`. With `RUN_ON_START=true` the generator
-  also runs when no subcommand is given. Exit `0` when every config succeeded
+  `app.py [generate [--dry-run] | watch --interval N [--initial-run]]`. With
+  `RUN_ON_START=true` the generator also runs when no subcommand is given.
+  `watch` never returns on its own. Exit `0` when every config succeeded
   or none exist, `1` when any config failed, `2` for a usage error (argparse).
   The entrypoint only warns on a non-zero exit.
 - **Logging**: modules use `logging.getLogger(__name__)`. `main()` calls

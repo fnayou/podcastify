@@ -12,7 +12,7 @@ Podcastify is a Python **package** (`podcastify/`) + thin `app.py` entry point. 
 | `podcastify/media.py` | `MediaProcessor` | ffprobe duration extraction, persistent cache, iTunes formatting. |
 | `podcastify/parser.py` | `ConfigurationManager`, `EpisodeManager`, pydantic models | YAML load + validate, metadata extraction, episode/image discovery. |
 | `podcastify/rss.py` | `RSSGenerator` | iTunes-compatible XML feed generation. |
-| `podcastify/cli.py` | `PodcastProcessor`, `main` | Orchestration: load → validate → discover → generate → atomic write. |
+| `podcastify/cli.py` | `PodcastProcessor`, `FeedWatcher`, `main` | Orchestration: load → validate → discover → generate → atomic write when the content changed; optional polling watcher that regenerates on config or media changes. |
 
 Note: 6 logical classes in 5 modules; `ConfigurationManager` + `EpisodeManager` (+ pydantic models + helpers) share `parser.py`.
 
