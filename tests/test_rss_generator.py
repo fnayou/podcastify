@@ -11,6 +11,7 @@ from podcastify.rss import RSSGenerator
 
 PUBLISHED = datetime(2024, 1, 1, tzinfo=timezone.utc)
 IT = "{http://www.itunes.com/dtds/podcast-1.0.dtd}"
+ATOM = "{http://www.w3.org/2005/Atom}"
 
 
 def _channel(**fields):
@@ -90,6 +91,8 @@ class TestGenerateFeedXml:
         xml = _xml(_channel(**{"author-name": "Author"}), [_episode(mp3)])
         assert xml.startswith("<?xml version='1.0' encoding='utf-8'?>\n<rss ")
         assert 'xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd"' in xml
+        assert 'xmlns:content="http://purl.org/rss/1.0/modules/content/"' in xml
+        assert 'xmlns:atom="http://www.w3.org/2005/Atom"' in xml
         root = ET.fromstring(xml.encode("utf-8"))
         assert root.tag == "rss"
         assert root.get("version") == "2.0"
@@ -118,7 +121,7 @@ class TestGenerateFeedXml:
         assert channel.findtext("description") == "Desc"
         assert channel.findtext("language") == "fr"
         assert channel.findtext("generator") == "podcastify"
-        assert channel.findtext(f"{IT}explicit") == "yes"
+        assert channel.findtext(f"{IT}explicit") == "true"
         assert channel.findtext(f"{IT}author") == "Author"
         assert channel.findtext(f"{IT}owner/{IT}name") == "Author"
         assert channel.findtext(f"{IT}owner/{IT}email") == "a@b.com"
@@ -134,13 +137,36 @@ class TestGenerateFeedXml:
         channel = _feed(_channel(title="", description=" ", language=None, explicit=None))
         assert channel.findtext("title") == "myshow"
         assert channel.findtext("link") == "http://localhost:8080"
-        assert channel.find("description").text is None
+        assert channel.find("description") is None
         assert channel.findtext("language") == "en"
-        assert channel.findtext(f"{IT}explicit") == "no"
-        assert channel.find(f"{IT}author").text is None
-        assert channel.find(f"{IT}summary").text is None
-        for tag in ("subtitle", "owner", "image", "category", "type", "block", "complete", "new-feed-url"):
+        assert channel.findtext(f"{IT}explicit") == "false"
+        tags = (
+            "author",
+            "summary",
+            "subtitle",
+            "owner",
+            "image",
+            "category",
+            "type",
+            "block",
+            "complete",
+            "new-feed-url",
+        )
+        for tag in tags:
             assert channel.find(f"{IT}{tag}") is None
+
+    def test_self_link(self, pub_dir):
+        link = _feed(_channel()).find(f"{ATOM}link")
+        assert link.attrib == {"href": "http://localhost:8080/myshow.xml", "rel": "self", "type": "application/rss+xml"}
+
+    def test_self_link_quotes_name(self, pub_dir):
+        link = _feed(_channel(), podcast="my show").find(f"{ATOM}link")
+        assert link.get("href") == "http://localhost:8080/my%20show.xml"
+
+    def test_no_empty_elements(self, mp3):
+        root = ET.fromstring(_xml(_channel(description=" "), [_episode(mp3)]).encode("utf-8"))
+        empty = [e.tag for e in root.iter() if not e.attrib and not len(e) and not (e.text or "").strip()]
+        assert empty == []
 
     def test_owner_with_email_only(self, pub_dir):
         owner = _feed(_channel(**{"author-email": "a@b.com"})).find(f"{IT}owner")
@@ -172,7 +198,7 @@ class TestGenerateFeedXml:
         assert enclosure.get("url") == "http://localhost:8080/myshow/ep01.mp3"
         assert enclosure.get("length") == "64"
         assert enclosure.get("type") == "audio/mpeg"
-        assert item.findtext(f"{IT}explicit") == "yes"
+        assert item.findtext(f"{IT}explicit") == "true"
         assert item.findtext(f"{IT}author") == "Author"
         assert item.findtext(f"{IT}subtitle") == "Sub"
         assert item.findtext(f"{IT}summary") == "Desc"
@@ -185,11 +211,11 @@ class TestGenerateFeedXml:
         item = _feed(_channel(explicit=True, **{"author-name": "Author"}), [_episode(mp3)]).find("item")
         assert item.findtext("title") == "ep01"
         assert len(item.findtext("guid")) == 40
-        assert item.find("description").text is None
-        assert item.findtext(f"{IT}explicit") == "yes"
+        assert item.find("description") is None
+        assert item.findtext(f"{IT}explicit") == "true"
         assert item.findtext(f"{IT}author") == "Author"
         assert item.findtext(f"{IT}duration") == "0:42"
-        for tag in ("subtitle", "image", "season", "episode", "episodeType"):
+        for tag in ("summary", "subtitle", "image", "season", "episode", "episodeType"):
             assert item.find(f"{IT}{tag}") is None
 
     def test_episode_overrides_channel(self, mp3):
@@ -197,7 +223,7 @@ class TestGenerateFeedXml:
             _channel(explicit=True, **{"author-name": "Author"}),
             [_episode(mp3, explicit=False, duration_hms="1:00", **{"author-name": "Guest"})],
         ).find("item")
-        assert item.findtext(f"{IT}explicit") == "no"
+        assert item.findtext(f"{IT}explicit") == "false"
         assert item.findtext(f"{IT}author") == "Guest"
         assert item.findtext(f"{IT}duration") == "1:00"
 

@@ -4,6 +4,7 @@ import re
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Union
+from urllib.parse import quote
 
 from podcastify.config import Config
 from podcastify.media import MediaProcessor
@@ -20,9 +21,13 @@ _ILLEGAL_XML_CHARS = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f￾￿]")
 
 ITUNES_NS = "http://www.itunes.com/dtds/podcast-1.0.dtd"
 IT = f"{{{ITUNES_NS}}}"
+ATOM_NS = "http://www.w3.org/2005/Atom"
+ATOM = f"{{{ATOM_NS}}}"
+CONTENT_NS = "http://purl.org/rss/1.0/modules/content/"
 EPISODE_TYPES = ("full", "trailer", "bonus")
 
 ET.register_namespace("itunes", ITUNES_NS)
+ET.register_namespace("atom", ATOM_NS)
 
 
 class RSSGenerator:
@@ -45,9 +50,15 @@ class RSSGenerator:
             element.text = cls.strip_illegal_xml_chars(text)
         return element
 
+    @classmethod
+    def _add_optional(cls, parent: ET.Element, tag: str, text: Optional[str]) -> None:
+        cleaned = cls.strip_illegal_xml_chars(text) if text else ""
+        if cleaned.strip():
+            cls._add(parent, tag, cleaned)
+
     @staticmethod
-    def _non_blank(value: str) -> Optional[str]:
-        return value if value.strip() else None
+    def _explicit(value: bool) -> str:
+        return "true" if value else "false"
 
     @classmethod
     def _add_categories(cls, parent: ET.Element, categories: Union[str, List[Any], Dict[str, Any], None]) -> None:
@@ -68,7 +79,7 @@ class RSSGenerator:
 
     def generate_feed_xml(self, podcast_name: str, channel: PodcastChannelModel, episodes: List[Episode]) -> str:
         logger.debug(f"Render channel: {podcast_name}")
-        rss = ET.Element("rss", {"version": "2.0"})
+        rss = ET.Element("rss", {"version": "2.0", "xmlns:content": CONTENT_NS})
         channel_element = self._build_channel(rss, podcast_name, channel)
         for episode in episodes:
             logger.debug(f"Build episode item: {episode.model.file}")
@@ -81,16 +92,24 @@ class RSSGenerator:
         element = add(rss, "channel")
         add(element, "title", channel.title or podcast_name)
         add(element, "link", channel.link or Config.BASE_URL)
-        add(element, "description", self._non_blank(channel.description))
+        add(
+            element,
+            f"{ATOM}link",
+            attrib={
+                "href": f"{Config.BASE_URL}/{quote(podcast_name)}.xml",
+                "rel": "self",
+                "type": "application/rss+xml",
+            },
+        )
+        self._add_optional(element, "description", channel.description)
         add(element, "language", channel.language)
         add(element, "generator", "podcastify")
         add(element, "lastBuildDate", rfc2822_date(datetime.now(timezone.utc)))
-        add(element, f"{IT}explicit", "yes" if channel.explicit else "no")
-        add(element, f"{IT}author", channel.author_name or None)
+        add(element, f"{IT}explicit", self._explicit(channel.explicit))
+        self._add_optional(element, f"{IT}author", channel.author_name)
 
-        if channel.subtitle:
-            add(element, f"{IT}subtitle", channel.subtitle)
-        add(element, f"{IT}summary", self._non_blank(channel.summary or channel.description))
+        self._add_optional(element, f"{IT}subtitle", channel.subtitle)
+        self._add_optional(element, f"{IT}summary", channel.summary or channel.description)
 
         image = EpisodeManager.resolve_image_url(podcast_name, channel.image)
         if image:
@@ -139,7 +158,7 @@ class RSSGenerator:
             {"isPermaLink": "false"},
         )
         add(item, "title", model.title or path.stem)
-        add(item, "description", self._non_blank(description))
+        self._add_optional(item, "description", description)
         add(item, "pubDate", rfc2822_date(episode.published))
         add(
             item,
@@ -150,14 +169,11 @@ class RSSGenerator:
                 "type": EpisodeManager.media_type(path),
             },
         )
-        add(item, f"{IT}explicit", "yes" if explicit else "no")
-        add(item, f"{IT}author", model.author_name or channel.author_name or None)
-
-        if duration:
-            add(item, f"{IT}duration", duration)
-        if model.subtitle:
-            add(item, f"{IT}subtitle", model.subtitle)
-        add(item, f"{IT}summary", self._non_blank(model.summary or description))
+        add(item, f"{IT}explicit", self._explicit(explicit))
+        self._add_optional(item, f"{IT}author", model.author_name or channel.author_name)
+        self._add_optional(item, f"{IT}duration", duration)
+        self._add_optional(item, f"{IT}subtitle", model.subtitle)
+        self._add_optional(item, f"{IT}summary", model.summary or description)
 
         image = EpisodeManager.resolve_image_url(podcast_name, model.image)
         if image:

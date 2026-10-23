@@ -511,7 +511,7 @@ class TestEdgeCases:
         assert PodcastProcessor().process_podcast("myshow", cfg) is True
         channel = ET.fromstring((tmp_path / "myshow.xml").read_bytes()).find("channel")
         assert channel.findtext("title") == "myshow"
-        assert channel.find("description").text is None
+        assert channel.find("description") is None
         assert [r.levelname for r in caplog.records if r.levelname in ("WARNING", "ERROR")] == []
         assert [r.message for r in caplog.records if r.levelname == "INFO"] == [
             f"Published myshow: 1 episodes -> {tmp_path / 'myshow.xml'}"
