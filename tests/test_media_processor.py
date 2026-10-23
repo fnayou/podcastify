@@ -205,6 +205,46 @@ class TestGetDurationSeconds:
         MediaProcessor.warm_durations_parallel(paths, max_workers=2)
         assert proc_mock.call_count == 3
 
+    def test_ffprobe_missing_returns_none_without_caching(self, mocker, mock_mp3, tmp_path, monkeypatch):
+        cache_root = tmp_path / "cache"
+        cache_root.mkdir()
+        monkeypatch.setattr("podcastify.config.Config.CACHE_ROOT", cache_root)
+        MediaProcessor.clear_cache()
+        mocker.patch(
+            "podcastify.media.subprocess.run",
+            side_effect=FileNotFoundError(2, "No such file or directory", "ffprobe"),
+        )
+        assert MediaProcessor.get_duration_seconds(mock_mp3) is None
+        assert MediaProcessor._duration_cache == {}
+        mocker.patch(
+            "podcastify.media.subprocess.run",
+            return_value=mocker.Mock(stdout="42.0\n", stderr=""),
+        )
+        assert MediaProcessor.get_duration_seconds(mock_mp3) == 42.0
+
+    def test_ffprobe_missing_warns_once_in_parallel(self, mocker, tmp_path, monkeypatch, caplog):
+        import logging
+        caplog.set_level(logging.DEBUG)
+        cache_root = tmp_path / "cache"
+        cache_root.mkdir()
+        monkeypatch.setattr("podcastify.config.Config.CACHE_ROOT", cache_root)
+        MediaProcessor.clear_cache()
+        paths = []
+        for i in range(3):
+            p = tmp_path / f"ep{i}.mp3"
+            p.write_bytes(b"\x00" * 64)
+            paths.append(p)
+        mocker.patch(
+            "podcastify.media.subprocess.run",
+            side_effect=FileNotFoundError(2, "No such file or directory", "ffprobe"),
+        )
+        MediaProcessor.warm_durations_parallel(paths, max_workers=2)
+        MediaProcessor.warm_durations_parallel(paths, max_workers=2)
+        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert len(warnings) == 1
+        assert "ffprobe" in warnings[0].message
+        assert MediaProcessor._duration_cache == {}
+
     def test_zero_byte_file_returns_none(self, mock_mp3):
         """Zero-byte file should return None without calling ffprobe."""
         MediaProcessor.clear_cache()
