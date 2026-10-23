@@ -5,7 +5,7 @@ import re
 import tempfile
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from podcastify.config import Config
 from podcastify.logging_config import configure_logging
@@ -185,6 +185,62 @@ class PodcastProcessor:
         return failed
 
 
+class FeedWatcher:
+    CONFIG_SUFFIXES = ("-podcast.yaml", "-podcast.yml")
+
+    def __init__(self, processor: PodcastProcessor, interval: int, initial_run: bool = False):
+        self.processor = processor
+        self.interval = interval
+        self.last: Optional[Tuple[Tuple[str, int, int], ...]] = None if initial_run else self.fingerprint()
+
+    @classmethod
+    def fingerprint(cls) -> Tuple[Tuple[str, int, int], ...]:
+        candidates: List[Path] = []
+        if Config.PODCASTS_ROOT.is_dir():
+            candidates += [p for p in Config.PODCASTS_ROOT.iterdir() if p.name.endswith(cls.CONFIG_SUFFIXES)]
+        if Config.PUBLIC_ROOT.is_dir():
+            for pub_dir in Config.PUBLIC_ROOT.iterdir():
+                if pub_dir.is_dir():
+                    candidates += [p for p in pub_dir.iterdir() if p.suffix.lower() in Config.MEDIA_TYPES]
+        entries = []
+        for path in candidates:
+            try:
+                st = path.stat()
+            except OSError:
+                continue
+            entries.append((str(path), st.st_size, st.st_mtime_ns))
+        return tuple(sorted(entries))
+
+    def check(self) -> Optional[int]:
+        current = self.fingerprint()
+        if current == self.last:
+            return None
+        self.last = current
+        logger.info("Change detected; regenerating feeds")
+        failed = self.processor.process_all_podcasts()
+        if failed:
+            logger.error(f"Regeneration finished: {failed} podcast(s) failed; retrying on the next change")
+        else:
+            logger.info("Regeneration finished: all podcasts processed")
+        return failed
+
+    def run(self) -> None:
+        logger.info(f"Watching configs and media for changes every {self.interval}s")
+        while True:
+            time.sleep(self.interval)
+            self.check()
+
+
+def _positive_int(value: str) -> int:
+    try:
+        number = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"'{value}' is not a whole number of seconds")
+    if number < 1:
+        raise argparse.ArgumentTypeError(f"interval must be at least 1 second, got {number}")
+    return number
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="app.py", description="Podcastify RSS generator")
     subparsers = parser.add_subparsers(dest="command")
@@ -194,6 +250,18 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="validate configs and episodes without writing feeds",
     )
+    watch = subparsers.add_parser("watch", help="regenerate feeds when configs or media change")
+    watch.add_argument(
+        "--interval",
+        type=_positive_int,
+        required=True,
+        help="seconds between change checks",
+    )
+    watch.add_argument(
+        "--initial-run",
+        action="store_true",
+        help="regenerate on the first check even if nothing changed",
+    )
     return parser
 
 
@@ -201,6 +269,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     args = build_parser().parse_args(argv)
     configure_logging()
     logger.info("Starting podcast RSS generator")
+    if args.command == "watch":
+        FeedWatcher(PodcastProcessor(), interval=args.interval, initial_run=args.initial_run).run()
+        return 0
     if args.command == "generate" or Config.RUN_ON_START:
         processor = PodcastProcessor(dry_run=getattr(args, "dry_run", False))
         failed = processor.process_all_podcasts()
