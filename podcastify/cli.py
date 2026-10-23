@@ -44,6 +44,12 @@ class PodcastProcessor:
     def process_podcast(self, podcast_name: str, config_path: Path) -> bool:
         try:
             logger.debug(f"Processing podcast: {podcast_name}")
+            if not Config.BASE_URL.startswith(("http://", "https://")):
+                logger.error(
+                    f"Invalid PUBLIC_BASE_URL '{Config.BASE_URL}' for {podcast_name}: "
+                    "must start with http:// or https://"
+                )
+                return False
             cfg = self.config_manager.load_yaml(config_path)
             if not cfg:
                 logger.error(f"Empty or invalid config for {podcast_name}")
