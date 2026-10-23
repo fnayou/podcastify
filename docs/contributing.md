@@ -104,7 +104,7 @@ The `commit-msg` hook checks this locally (`task dev:hooks`). The `commits` CI c
 
 ## Releases
 
-Releases are git tags in the form `vYYYY.M.PATCH` (CalVer, for example `v2026.10.0`), pushed by the owner. The tag format, the Docker Hub tags, the provenance and the release notes are recorded in [ADR 0007](adr/0007-calver-and-release-policy.md). The helper `task release:tag`, which computes and proposes the next tag, is planned (#103) and does not exist yet. Release notes are published on [GitHub Releases](https://github.com/fnayou/podcastify/releases).
+Releases are git tags in the form `vYYYY.M.PATCH` (CalVer, for example `v2026.10.0`), pushed by the owner. The tag format, the Docker Hub tags, the provenance and the release notes are recorded in [ADR 0007](adr/0007-calver-and-release-policy.md). The helper `task release:tag` computes and creates the tag (see "Make a release" below). Release notes are published on [GitHub Releases](https://github.com/fnayou/podcastify/releases).
 
 The Docker Hub overview is synced from `README.md` on each stable release (not on prereleases); the short description is the image's OCI description label. If the sync step is red, the release is fine: the step never blocks it. The owner then checks the token rights: the `DOCKERHUB_TOKEN` secret must belong to a token that can edit the repository overview (read/write/delete scope, and Admin rights on the repository if it belongs to an organisation). Keep the links in `README.md` absolute (`https://github.com/fnayou/podcastify/blob/main/...`), because Docker Hub does not resolve relative ones.
 
@@ -118,6 +118,23 @@ task release:changelog TAG=v2026.10.0   # an existing tag, as the release job se
 ```
 
 The task runs a pinned git-cliff image in a throwaway container with the repository mounted read-only, so nothing is installed on the host. It needs Docker and uses the same `cliff.toml` and range rules as `release.yml`. When you change the git-cliff version, change it in `tasks/release.yml` and in the `version` input of the git-cliff step in `release.yml` together.
+
+### Make a release
+
+1. Merge the pull requests for the release to `main` and wait for the `CI` run of the merge commit to be green.
+2. On an up-to-date `main` (clean tree, `HEAD` equal to `origin/main`), run `task release:tag`. Add `PRERELEASE=rc` for a release candidate. To rehearse from any branch without creating anything, run `task release:tag -- --dry-run`.
+3. The helper fetches `main` and the tags, refuses unless the checks above hold and the latest `CI` run for `HEAD` is green (the CI check is skipped, with a note, when `gh` is not installed), and prints the proposed tag and the release notes preview from `task release:changelog`. Review the notes.
+4. Answer `y` to create the annotated tag `Release <tag>` locally. Any other answer creates nothing.
+5. The helper never pushes. Run the `git push origin <tag>` command it prints.
+6. Watch the `Release` workflow: `validate-tag`, `notes-check`, `test`, `docker`, `release`.
+7. Check the Docker Hub tags (`YYYY.M.PATCH` and, for a stable release, `latest`), the Docker Hub overview and the GitHub Release page (notes, the three `docker` lines, prerelease flag for a candidate).
+
+The next tag is `vYYYY.M.PATCH` for the current UTC month, where `PATCH` is the highest stable `PATCH` already tagged in that month plus one, or `0`. The `PATCH` is compared as a number, so `9` is followed by `10`. Tags that are not CalVer-shaped (`v1.x`, `1.0.1`) are ignored. A release candidate tag (`-rc.N`) never counts as the holder of a `PATCH`: with `v2026.10.0-rc.1` and no stable tag, the next stable tag is `v2026.10.0`, not `v2026.10.1`. `PRERELEASE=rc` proposes the next candidate of the next stable tag, numbered from `rc.1`.
+
+If a release fails:
+- Before the image is pushed (`validate-tag`, `notes-check`, `test`, or a red `docker` job before the push step): nothing is published. Fix the cause on `main`. Delete the bad tag locally and on `origin` (`git tag -d <tag>` and `git push origin :refs/tags/<tag>`), a deliberate owner action, then run `task release:tag` again; it proposes the same tag.
+- After the image is pushed (the `release` job is red): the image is public, so do not reuse the tag. Create the GitHub Release by hand from the tag with the notes from `task release:changelog TAG=<tag>`, or fix the cause and release the next `PATCH`.
+- A red "Sync Docker Hub overview" step does not fail the release; see the token note above.
 
 ## CI time budget
 
