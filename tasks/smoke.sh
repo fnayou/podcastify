@@ -7,6 +7,7 @@ NAME="podcastify-smoke-$$"
 WORK="$(mktemp -d)"
 
 cleanup() {
+  docker exec "$NAME" sh -c 'rm -rf /app/public/* /app/public/.[!.]*' >/dev/null 2>&1 || true
   docker rm -f "$NAME" >/dev/null 2>&1 || true
   rm -rf "$WORK"
 }
