@@ -254,10 +254,7 @@ class MediaProcessor:
             # persist=False: workers only mutate the in-memory cache (under the
             # lock). The disk cache is written once below, after all probes join,
             # instead of N times mid-flight (was O(N^2) writes + the race window).
-            futures = {
-                executor.submit(cls.get_duration_seconds, p, persist=False): p
-                for p in need_probe
-            }
+            futures = {executor.submit(cls.get_duration_seconds, p, persist=False): p for p in need_probe}
             for future in as_completed(futures):
                 future.result()
         cls._save_disk_cache()

@@ -154,7 +154,7 @@ class TestGenerateFeedXml:
         )
         assert "<title>Episode 1</title>" in item
         assert "<description><![CDATA[Desc]]></description>" in item
-        assert "<guid isPermaLink=\"false\">custom-guid</guid>" in item
+        assert '<guid isPermaLink="false">custom-guid</guid>' in item
         assert 'url="http://localhost:8080/myshow/ep01.mp3"' in item
         assert "<itunes:explicit>yes</itunes:explicit>" in item
         assert "<itunes:author>Author</itunes:author>" in item
@@ -176,7 +176,7 @@ class TestGenerateFeedXml:
             {"author-name": "Author", "explicit": False},
         )
         assert "<title>ep01</title>" in item  # stem of filename
-        assert "<guid isPermaLink=\"false\">" in item
+        assert '<guid isPermaLink="false">' in item
         assert "<itunes:explicit>no</itunes:explicit>" in item
         # No season/episode/type if not present
         assert "<itunes:season>" not in item
@@ -289,8 +289,15 @@ class TestFeedWellFormed:
         )
         channel = ET.fromstring(xml.encode("utf-8")).find("channel")
         it = self.ITUNES
-        for tag in ("title", "description", f"{it}summary", f"{it}subtitle", f"{it}author",
-                    f"{it}owner/{it}name", f"{it}owner/{it}email"):
+        for tag in (
+            "title",
+            "description",
+            f"{it}summary",
+            f"{it}subtitle",
+            f"{it}author",
+            f"{it}owner/{it}name",
+            f"{it}owner/{it}email",
+        ):
             assert channel.find(tag).text == self.CLEAN
         category = channel.find(f"{it}category")
         assert category.get("text") == self.CLEAN

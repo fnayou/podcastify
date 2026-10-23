@@ -55,9 +55,7 @@ class TestProcessPodcast:
         pub = tmp_path / "myshow"
         pub.mkdir()
         (pub / "ep01.mp3").write_bytes(b"\x00" * 64)
-        mocker.patch(
-            "podcastify.cli.RSSGenerator.generate_feed_xml", side_effect=TypeError("boom")
-        )
+        mocker.patch("podcastify.cli.RSSGenerator.generate_feed_xml", side_effect=TypeError("boom"))
         ok = PodcastProcessor().process_podcast("myshow", cfg)
         assert ok is False
         record = next(r for r in caplog.records if "Failed to process myshow" in r.message)
@@ -224,10 +222,7 @@ class TestMissingEpisodeFiles:
         assert len(warnings) == 1
         assert "myshow" in warnings[0].message
         assert "ep02.mp3" in warnings[0].message
-        assert any(
-            "Published myshow: 1 episodes" in r.message and "1 skipped" in r.message
-            for r in caplog.records
-        )
+        assert any("Published myshow: 1 episodes" in r.message and "1 skipped" in r.message for r in caplog.records)
 
     def test_all_episode_files_missing(self, tmp_path, monkeypatch, caplog):
         monkeypatch.setattr("podcastify.config.Config.PODCASTS_ROOT", tmp_path)
@@ -419,9 +414,7 @@ class TestUnchangedFeed:
         assert PodcastProcessor().process_podcast("myshow", cfg) is True
         (tmp_path / "myshow" / "ep2.mp3").write_bytes(b"\x00" * 64)
         cfg.write_text(
-            yaml.safe_dump(
-                {"title": "T", "description": "D", "episodes": [{"file": "ep.mp3"}, {"file": "ep2.mp3"}]}
-            ),
+            yaml.safe_dump({"title": "T", "description": "D", "episodes": [{"file": "ep.mp3"}, {"file": "ep2.mp3"}]}),
             encoding="utf-8",
         )
         assert PodcastProcessor().process_podcast("myshow", cfg) is True

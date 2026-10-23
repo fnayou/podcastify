@@ -11,9 +11,7 @@ from podcastify.parser import EpisodeManager, validate_podcast_config
 
 
 def _validated(episodes):
-    model, err = validate_podcast_config(
-        {"title": "T", "description": "D", "episodes": episodes}
-    )
+    model, err = validate_podcast_config({"title": "T", "description": "D", "episodes": episodes})
     assert err is None
     return model
 
@@ -229,9 +227,7 @@ class TestResolveImageUrl:
 
     def test_absolute_url(self, tmp_path, monkeypatch):
         monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
-        result = EpisodeManager.resolve_image_url(
-            "myshow", {"image": "https://example.com/cover.jpg"}
-        )
+        result = EpisodeManager.resolve_image_url("myshow", {"image": "https://example.com/cover.jpg"})
         assert result == "https://example.com/cover.jpg"
 
     def test_no_image(self):
@@ -240,7 +236,5 @@ class TestResolveImageUrl:
 
     def test_http_url(self, tmp_path, monkeypatch):
         monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
-        result = EpisodeManager.resolve_image_url(
-            "myshow", {"image": "http://example.com/cover.jpg"}
-        )
+        result = EpisodeManager.resolve_image_url("myshow", {"image": "http://example.com/cover.jpg"})
         assert result == "http://example.com/cover.jpg"
