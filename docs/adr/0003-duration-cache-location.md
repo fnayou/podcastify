@@ -24,9 +24,9 @@ Accepted
 ## Decision
 
 Move the duration cache out of `PUBLIC_ROOT` into a dedicated, non-served
-location controlled by a new `CACHE_ROOT` env var (default `/app/.cache`,
-created on demand). Keep the on-disk format and `(path, mtime)` keying.
-Prune entries whose `path` no longer exists on save.
+location, `CACHE_ROOT` (default `/app/.cache`, created on demand; an image
+default, not a user setting, see ADR 0004). Keep the on-disk format and
+`(path, mtime)` keying. Prune entries whose `path` no longer exists on save.
 
 ## Consequences
 
