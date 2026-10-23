@@ -35,6 +35,7 @@ fi
 echo "🌐 Starting Caddy on :${SERVICE_PORT:-8080}"
 
 # Caddy is the only long-running process and logs to stdout itself, so it runs
-# in the foreground directly — no supervisor. tini stays PID 1 (reaps zombies,
-# forwards signals); $RUNAS is empty in hardened mode, su-exec in root mode.
-exec /sbin/tini -- $RUNAS caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+# in the foreground directly — no supervisor. tini is PID 1 for the whole
+# container life (Dockerfile ENTRYPOINT) and forwards signals to this script,
+# then to Caddy; $RUNAS is empty in hardened mode, su-exec in root mode.
+exec $RUNAS caddy run --config /etc/caddy/Caddyfile --adapter caddyfile

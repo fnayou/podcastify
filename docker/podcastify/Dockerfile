@@ -60,4 +60,4 @@ EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=120s CMD wget -q --spider http://127.0.0.1:${SERVICE_PORT}/healthz || exit 1
 
-ENTRYPOINT ["/entrypoint.sh"]
+ENTRYPOINT ["/sbin/tini", "--", "/entrypoint.sh"]
