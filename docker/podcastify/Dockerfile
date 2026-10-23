@@ -1,9 +1,9 @@
 # Caddy binary from the official image. The alpine `caddy` package lags
 # upstream (2.10.0) and bundles old Go deps flagged by Docker Scout; the
 # official image ships the patched release built with the current Go toolchain.
-FROM caddy:2.11.4-alpine AS caddy
+FROM caddy:2.11.6-alpine AS caddy
 
-FROM python:3.12-alpine3.22
+FROM python:3.14-alpine3.22
 
 # System deps (keep small, versions pinned to alpine 3.22 stable).
 # `apk upgrade` patches base OS packages (e.g. openssl 3.5.6-r0 -> 3.5.7-r0).
