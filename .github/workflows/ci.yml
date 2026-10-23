@@ -114,6 +114,9 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Smoke test the built image
+        run: tasks/smoke.sh local/podcastify:${{ github.sha }}
+
       - name: Trivy scan (non-blocking)
         id: trivy
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
