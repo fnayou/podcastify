@@ -27,13 +27,13 @@ services:
     ports:
       - "${HOST_PORT:-8080}:${SERVICE_PORT:-8080}"
     environment:
-      - SERVICE_PORT=${SERVICE_PORT:-8080}
+      - SERVICE_PORT
       - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://localhost:${HOST_PORT:-8080}}
-      - RUN_ON_START=${RUN_ON_START:-true}
-      - PUBLISH_XML=${PUBLISH_XML:-true}
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - PUID=${PUID:-1000}
-      - PGID=${PGID:-1000}
+      - RUN_ON_START
+      - PUBLISH_XML
+      - LOG_LEVEL
+      - PUID
+      - PGID
     volumes:
       - ./public:/app/public
       - ./podcasts:/app/podcasts
@@ -67,6 +67,8 @@ PGID=1000
 | `PUBLISH_XML` | `true` | Write XML files to disk. Accepts `true/yes/1/on` and `false/no/0/off`; other values warn and count as false. |
 | `LOG_LEVEL` | `INFO` | Logging verbosity: `DEBUG`, `INFO`, `WARNING`, or `ERROR`. |
 
+Compose passes these through from `.env` or your shell. A variable you leave unset takes the image default shown above.
+
 The paths inside the container are fixed: `/app/public`, `/app/podcasts` and `/app/.cache`. To keep your data elsewhere on the host, change the left side of the volume mounts in `docker-compose.yml` (see [ADR 0004](adr/0004-path-env-vars-are-internal.md)).
 
 ## Log Visibility
@@ -88,6 +90,12 @@ For production behind a reverse proxy at `https://podcasts.domain.tld`:
 
 1. Set `PUBLIC_BASE_URL=https://podcasts.domain.tld` in `.env`
 2. Forward to the container's `${SERVICE_PORT}` (default 8080)
+3. Publish the port on the loopback interface only, so the plain-HTTP port is not reachable from the LAN or internet around the proxy:
+
+```yaml
+    ports:
+      - "127.0.0.1:${HOST_PORT:-8080}:${SERVICE_PORT:-8080}"
+```
 
 ### Caddy Example
 

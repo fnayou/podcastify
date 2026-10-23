@@ -68,13 +68,13 @@ services:
     ports:
       - "${HOST_PORT:-8080}:${SERVICE_PORT:-8080}"
     environment:
-      - SERVICE_PORT=${SERVICE_PORT:-8080}
+      - SERVICE_PORT
       - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://localhost:${HOST_PORT:-8080}}
-      - RUN_ON_START=${RUN_ON_START:-true}
-      - PUBLISH_XML=${PUBLISH_XML:-true}
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - PUID=${PUID:-1000}
-      - PGID=${PGID:-1000}
+      - RUN_ON_START
+      - PUBLISH_XML
+      - LOG_LEVEL
+      - PUID
+      - PGID
     volumes:
       - ./public:/app/public
       - ./podcasts:/app/podcasts
@@ -84,7 +84,12 @@ services:
 
 Create a `.env` file to set `HOST_PORT` and `PUBLIC_BASE_URL`; see [Environment Variables](docs/deployment.md#environment-variables).
 
-For production behind a reverse proxy at `https://podcasts.domain.tld`, set `PUBLIC_BASE_URL=https://podcasts.domain.tld` and forward to the container’s `${SERVICE_PORT}` (default 8080).
+For production behind a reverse proxy at `https://podcasts.domain.tld`, set `PUBLIC_BASE_URL=https://podcasts.domain.tld` and forward to the container’s `${SERVICE_PORT}` (default 8080). Publish the port on the loopback interface only, so the plain-HTTP port is not reachable around the proxy:
+
+```yaml
+    ports:
+      - "127.0.0.1:${HOST_PORT:-8080}:${SERVICE_PORT:-8080}"
+```
 
 ---
 
