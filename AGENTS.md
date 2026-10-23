@@ -37,6 +37,8 @@ task podcastify:clean:feeds     # remove generated XML
 task doctor                     # check environment
 task dev:test:coverage          # tests with 90% coverage gate
 task dev:validate               # tests + Docker build, mirrors CI
+task worktree:install           # install or re-assert worktree lane tooling
+task worktree:verify            # check lane tooling and the merge refusals
 ```
 
 ## Architecture
@@ -66,6 +68,17 @@ Invariants and gotchas: `docs/architecture-notes.md`. Runtime and container: `do
 - `pytest` + `pytest-mock`; tests in `tests/`, one file per class or module; fixtures in `tests/conftest.py`.
 - All new code has tests. Coverage of `podcastify/` stays at or above 90%.
 - Before finishing a change, run `task dev:validate` (CI parity: tests plus Docker build).
+
+## Worktree lanes
+
+Parallel work runs in git worktrees ("lanes"), each opened as a herdr workspace through worktrunk and the pinned herdr-worktrunk plugin. Guide: [docs/worktree-lanes.md](docs/worktree-lanes.md). Lane contract:
+
+- Create lanes from the primary checkout with worktrunk. The gitignored files listed in `.worktreeinclude` (`.env`) are copied into a new lane.
+- Shared resource: the host port. Compose project names come from the directory, so containers, networks and bind mounts are per lane. Give each lane its own `HOST_PORT` in its `.env`. The lane that keeps 8080 is the resource owner; stop its containers (`task docker:down`) before another lane takes 8080. A claim moves nothing else and authorizes no rebuild.
+- Never commit or merge through worktrunk. Commit with git; merges happen on GitHub as a rebase merge. Worktrunk hooks refuse the local forms (`.config/wt.toml`).
+- A lane is a concurrency boundary, not a credential sandbox.
+- One writing agent per lane. Removing a lane, its branch or its workspace needs explicit operator authorization.
+- Setup and checks: `task worktree:install`, `task worktree:verify`.
 
 ## Git
 

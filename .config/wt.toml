@@ -1,0 +1,27 @@
+# Worktrunk project config - guide: docs/worktree-lanes.md
+#
+# Worktrunk reads this from the worktree a command runs in. Every command here
+# needs approval once per machine; `task worktree:install` records it, because
+# DECLINING an approval skips every project hook for that operation and lets the
+# operation continue - which would turn both refusals below into nothing.
+
+# A new lane gets the gitignored files it needs to run: the files are listed in
+# `.worktreeinclude`, and `--require-include` copies nothing if that file is ever
+# missing rather than copying every ignored file there is.
+#
+# pre-start and not post-start: it blocks, so the files are in place before a
+# session started in the lane reaches for them.
+pre-start = "wt step copy-ignored --require-include"
+
+# Merges happen on GitHub, through a PR, as a rebase merge - never locally.
+# `wt merge` squashes by default and fast-forwards the LOCAL target branch.
+#
+# BOTH hooks, because one is not enough:
+#   - pre-commit runs before the squash commit, so it refuses a default
+#     `wt merge` (and `wt step commit`/`wt step squash`) BEFORE the branch is
+#     rewritten;
+#   - `--no-squash --no-commit` makes no commit, so pre-commit never runs, and
+#     only pre-merge stops it - after the rebase, before the target moves.
+# `--no-hooks` bypasses both. This is a guard against accident, not a control.
+pre-commit = "echo 'refused: commit with git, not with worktrunk; merges go through a GitHub PR.' >&2; exit 1"
+pre-merge = "echo 'refused: merge through a GitHub PR (rebase merge), never locally.' >&2; exit 1"
