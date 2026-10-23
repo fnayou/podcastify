@@ -164,57 +164,80 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Checkout
+      - name: Checkout (full history for the notes)
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
 
-      - name: Extract changelog section
-        id: changelog
+      - name: Notes range
+        id: range
+        shell: bash
+        env:
+          TAG: ${{ github.ref_name }}
+          FIRST_COMMIT: f1e964de
+        run: |
+          if [[ "${TAG}" == *-* ]]; then
+            PATTERN='^v20[0-9]{2}\.[0-9]+\.[0-9]+(-.*)?$'
+          else
+            PATTERN='^v20[0-9]{2}\.[0-9]+\.[0-9]+$'
+          fi
+          PREV="$(git log --simplify-by-decoration --format=%D "${TAG}^" | tr ',' '\n' | sed -n 's/^ *tag: //p' | grep -E "${PATTERN}" | head -n 1 || true)"
+          START="${PREV:-${FIRST_COMMIT}}"
+          SELF="$(printf '%s' "${TAG}" | sed 's/\./\\./g')"
+          echo "Notes range: ${START}..${TAG}"
+          echo "args=--output release-notes.md --tag-pattern '^${SELF}\$' ${START}..${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Generate release notes
+        uses: orhun/git-cliff-action@a9a95522b26fe6403f7bb24031f21fb573d0f5ff # v4.9.1
+        with:
+          version: v2.14.2
+          config: cliff.toml
+          args: ${{ steps.range.outputs.args }}
+
+      - name: Check the notes are not empty
         shell: bash
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          START_MARKER="## ${GITHUB_REF_NAME}"
-          END_MARKER="^## [a-zA-Z0-9]"
-
-          CHANGELOG=$(awk "
-            /^${START_MARKER}/ { found=1; next }
-            found && /${END_MARKER}/ { exit }
-            found
-          " CHANGELOG.md)
-
-          if [ -z "$CHANGELOG" ]; then
-            CHANGELOG="See CHANGELOG.md for details."
+          if ! grep -q '[^[:space:]]' release-notes.md; then
+            echo "::error::git-cliff produced no release notes for ${GITHUB_REF_NAME}. Check that the range holds feat, fix, perf, build or revert commits, or breaking changes."
+            exit 1
           fi
 
-          echo "changelog<<EOF" >> $GITHUB_OUTPUT
-          echo "$CHANGELOG" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+      - name: Compose the release body
+        shell: bash
+        env:
+          VERSION: ${{ needs.docker.outputs.version }}
+          DIGEST: ${{ needs.docker.outputs.digest }}
+          REPO: ${{ github.repository }}
+        run: |
+          {
+            echo '## Docker Image'
+            echo '```'
+            echo "docker pull ${IMAGE_NAME}:${VERSION}"
+            echo '```'
+            echo
+            echo 'Immutable reference:'
+            echo '```'
+            echo "docker pull ${IMAGE_NAME}@${DIGEST}"
+            echo '```'
+            echo
+            echo 'Verify the signed provenance:'
+            echo '```'
+            echo "gh attestation verify oci://${REGISTRY}/${IMAGE_NAME}:${VERSION} --repo ${REPO}"
+            echo '```'
+            echo
+            echo '## Release Notes'
+            cat release-notes.md
+            echo
+            echo '## Artifacts'
+            echo '- Multi-arch: linux/amd64, linux/arm64'
+            echo '- SBOM and provenance attached'
+          } > release-body.md
 
       - name: Create Release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           tag_name: ${{ github.ref_name }}
           name: Release ${{ github.ref_name }}
-          body: |
-            ## Docker Image
-            ```
-            docker pull ${{ env.IMAGE_NAME }}:${{ needs.docker.outputs.version }}
-            ```
-
-            Immutable reference:
-            ```
-            docker pull ${{ env.IMAGE_NAME }}@${{ needs.docker.outputs.digest }}
-            ```
-
-            Verify the signed provenance:
-            ```
-            gh attestation verify oci://${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.docker.outputs.version }} --repo ${{ github.repository }}
-            ```
-
-            ## Release Notes
-            ${{ steps.changelog.outputs.changelog }}
-
-            ## Artifacts
-            - Multi-arch: linux/amd64, linux/arm64
-            - SBOM and provenance attached
+          body_path: release-body.md
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
