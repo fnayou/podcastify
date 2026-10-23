@@ -37,6 +37,7 @@ task podcastify:clean:feeds     # remove generated XML
 task doctor                     # check environment
 task dev:test:coverage          # tests with 90% coverage gate
 task dev:validate               # tests + Docker build, mirrors CI
+task release:changelog          # preview the release notes (git-cliff in a container)
 task worktree:install           # install or re-assert worktree lane tooling
 task worktree:verify            # check lane tooling and the merge refusals
 ```
@@ -86,5 +87,5 @@ Parallel work runs in git worktrees ("lanes"), each opened as a herdr workspace 
 - `main` is protected: changes land only through a PR with the `test`, `docker` and `commits` checks green. No force-push, no deletion, linear history.
 - PRs merge by rebase only, so each commit lands on `main` as written. Keep commits clean before opening the PR.
 - Branch from `main`: `feat/<slug>`, `fix/<slug>`, `chore/<slug>`.
-- Releases: tag `vX.Y.Z` on `main`; `release.yml` builds, scans, pushes the image and creates the GitHub Release from the matching `CHANGELOG.md` section.
+- Releases: tag `vYYYY.M.PATCH` on `main` (ADR 0007); `release.yml` builds, scans, pushes the image and creates the GitHub Release. The notes come from git-cliff (`cliff.toml`) over the Conventional Commits; `CHANGELOG.md` is frozen history. Preview them with `task release:changelog`.
 - Never commit, push, tag or rebase unless asked.

@@ -106,6 +106,17 @@ The `commit-msg` hook checks this locally (`task dev:hooks`). The `commits` CI c
 
 Releases are git tags in the form `vYYYY.M.PATCH` (CalVer, for example `v2026.10.0`), pushed by the owner. The tag format, the Docker Hub tags, the provenance and the release notes are recorded in [ADR 0007](adr/0007-calver-and-release-policy.md). The helper `task release:tag`, which computes and proposes the next tag, is planned (#103) and does not exist yet. Release notes are published on [GitHub Releases](https://github.com/fnayou/podcastify/releases).
 
+The notes are generated from the commit subjects by [git-cliff](https://git-cliff.org) with the root `cliff.toml`, so a clear Conventional Commit subject is the release note. `feat`, `fix`, `perf`, `build` and `revert` are listed; `ci`, `docs`, `chore`, `test`, `style` and `refactor` are hidden; `build(deps)`, `ci(deps)` and `chore(deps)` are folded into one "Dependencies" line; a `!` or a `BREAKING CHANGE:` footer puts the commit under "Breaking Changes", whatever its type; merge commits and non-conventional subjects are skipped. The range is the commits since the previous CalVer tag (a stable release skips release candidates when it looks for that tag), and `f1e964de..<tag>` for the first CalVer release. The release job fails when the notes are empty. `CHANGELOG.md` is frozen history and is not edited.
+
+Preview the notes of the commits on your current checkout:
+
+```bash
+task release:changelog                  # as the next stable release
+task release:changelog TAG=v2026.10.0   # an existing tag, as the release job sees it
+```
+
+The task runs a pinned git-cliff image in a throwaway container with the repository mounted read-only, so nothing is installed on the host. It needs Docker and uses the same `cliff.toml` and range rules as `release.yml`. When you change the git-cliff version, change it in `tasks/release.yml` and in the `version` input of the git-cliff step in `release.yml` together.
+
 ## CI time budget
 
 CI execution time is a requirement. A PR must not push any workflow past its budget. Every PR that touches `.github/workflows/` reports the job durations before and after the change in its description.
