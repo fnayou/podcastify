@@ -3,11 +3,9 @@
 ## Status
 
 Accepted on 2026-10-23, from the owner decisions of the design session in
-issue #48 (recorded by issue #100). Partly implemented: the Docker tags and the
-provenance are done (#101). The notes generator, the tag helper and the Docker
-Hub sync are done by the child tickets #102, #103 and #105. Until they land,
-the release notes, the tagging and the Docker Hub overview work as described in
-the Context.
+issue #48 (recorded by issue #100). Implemented: the Docker tags and the
+provenance (#101), the git-cliff release notes (#102), the tag helper
+`task release:tag` (#103) and the Docker Hub overview sync (#105).
 
 ## Context
 
