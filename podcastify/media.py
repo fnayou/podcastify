@@ -4,7 +4,7 @@ import subprocess
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 from podcastify.config import Config
 
@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 class MediaProcessor:
     _duration_cache: Dict[Tuple[str, float], Optional[float]] = {}
+    _unpersisted: Set[Tuple[str, float]] = set()
     _disk_loaded = False
     _ffprobe_missing_warned = False
     # Guards _duration_cache against concurrent mutation/iteration when
@@ -80,13 +81,18 @@ class MediaProcessor:
         # trigger "dictionary changed size during iteration".
         with cls._lock:
             items = list(cls._duration_cache.items())
+            unpersisted = set(cls._unpersisted)
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
+            newest: Dict[str, Tuple[float, Optional[float]]] = {}
+            for (file_name, mtime), v in items:
+                if file_name not in newest or mtime > newest[file_name][0]:
+                    newest[file_name] = (mtime, v)
             serializable = {}
-            for k, v in items:
-                file_path = Path(k[0])
-                if file_path.exists():
-                    serializable[cls._cache_key(file_path, k[1])] = v
+            for file_name, (mtime, v) in newest.items():
+                file_path = Path(file_name)
+                if (file_name, mtime) not in unpersisted and file_path.exists():
+                    serializable[cls._cache_key(file_path, mtime)] = v
             # Atomic write: avoids a half-written cache if multiple saves race.
             tmp = path.with_suffix(path.suffix + ".tmp")
             tmp.write_text(json.dumps(serializable), encoding="utf-8")
@@ -98,6 +104,7 @@ class MediaProcessor:
     @classmethod
     def clear_cache(cls) -> None:
         cls._duration_cache.clear()
+        cls._unpersisted.clear()
         cls._disk_loaded = False
         cls._ffprobe_missing_warned = False
         path = cls._cache_path()
@@ -118,6 +125,13 @@ class MediaProcessor:
             cls._duration_cache[key] = None
         if persist:
             cls._save_disk_cache()
+        return None
+
+    @classmethod
+    def _cache_timeout(cls, key: Tuple[str, float]) -> None:
+        with cls._lock:
+            cls._duration_cache[key] = None
+            cls._unpersisted.add(key)
         return None
 
     @classmethod
@@ -188,7 +202,7 @@ class MediaProcessor:
             return cls._cache_failure(key, persist=persist)
         except subprocess.TimeoutExpired as e:
             logger.warning(f"Failed to get duration for {mp3_path.name}: {e}")
-            return cls._cache_failure(key, persist=persist)
+            return cls._cache_timeout(key)
         except ValueError as e:
             logger.warning(f"Failed to get duration for {mp3_path.name}: {e}")
             return cls._cache_failure(key, persist=persist)
