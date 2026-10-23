@@ -5,6 +5,7 @@ import logging
 import os
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -64,6 +65,35 @@ def mock_ffprobe(mocker):
         "podcastify.media.subprocess.run",
         return_value=subprocess.CompletedProcess(args=["ffprobe"], returncode=0, stdout="42.0\n", stderr=""),
     )
+
+
+GOLDEN_NOW = datetime(2030, 1, 2, 3, 4, 5, tzinfo=timezone.utc)
+
+
+@pytest.fixture
+def frozen_clock(mocker):
+    """Pin the feed's lastBuildDate clock to GOLDEN_NOW."""
+
+    class FrozenDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return GOLDEN_NOW.astimezone(tz) if tz else GOLDEN_NOW.replace(tzinfo=None)
+
+    mocker.patch("podcastify.rss.datetime", FrozenDatetime)
+    return GOLDEN_NOW
+
+
+@pytest.fixture
+def golden_roots(monkeypatch, tmp_path):
+    """Point Config at tmp podcasts and public roots and return them."""
+    podcasts = tmp_path / "golden_podcasts"
+    public = tmp_path / "golden_public"
+    podcasts.mkdir()
+    public.mkdir()
+    monkeypatch.setattr("podcastify.config.Config.PODCASTS_ROOT", podcasts)
+    monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", public)
+    monkeypatch.setattr("podcastify.config.Config.BASE_URL", "http://localhost:8080")
+    return podcasts, public
 
 
 @pytest.fixture
