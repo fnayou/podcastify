@@ -140,9 +140,13 @@ The root filesystem is read-only. `public/`, `podcasts/` and `cache/` stay writa
 
 ## Caddyfile
 
-Shipped Caddyfile uses `{$SERVICE_PORT}`, serves a fixed `/healthz` response for the container healthcheck, does not list directories, and hides dotfiles:
+Shipped Caddyfile uses `{$SERVICE_PORT}`, turns the admin API off, serves a fixed `/healthz` response for the container healthcheck, does not list directories, and hides dotfiles. Responses carry `X-Content-Type-Options: nosniff` and no `Server` header. MP3s are cached for one day without `immutable`, so an episode fixed in place under the same filename reaches listeners within a day:
 
 ```caddy
+{
+  admin off
+}
+
 :{$SERVICE_PORT} {
   root * /app/public
 
@@ -151,13 +155,15 @@ Shipped Caddyfile uses `{$SERVICE_PORT}`, serves a fixed `/healthz` response for
   log_skip @health
   encode gzip
   header Access-Control-Allow-Origin "*"
+  header X-Content-Type-Options "nosniff"
+  header -Server
 
   @rss path *.xml
   header @rss Content-Type "application/rss+xml; charset=utf-8"
   header @rss Cache-Control "public, max-age=300, must-revalidate"
 
   @mp3 path *.mp3
-  header @mp3 Cache-Control "public, max-age=31536000, immutable"
+  header @mp3 Cache-Control "public, max-age=86400"
   header @mp3 Content-Type "audio/mpeg"
 
   @images path *.jpg *.jpeg *.png *.webp
