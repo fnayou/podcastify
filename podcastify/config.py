@@ -55,12 +55,6 @@ class Config:
         "link", "categories", "type", "block", "complete", "new_feed_url",
     ]
 
-    EPISODE_FIELDS = [
-        "title", "description", "summary", "subtitle", "pub_date",
-        "image", "explicit", "author-name", "season", "episode",
-        "episode_type", "guid", "duration_hms",
-    ]
-
     MEDIA_TYPES = {
         ".mp3": "audio/mpeg",
         ".m4a": "audio/x-m4a",

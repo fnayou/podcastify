@@ -129,6 +129,18 @@ class TestValidatePodcastConfig:
         assert model is not None
         assert model.title == "My Show"
 
+    def test_valid_nested_config(self, sample_nested_config):
+        model, err = validate_podcast_config(sample_nested_config)
+        assert err is None
+        assert model.title == "Nested Show"
+        assert model.author_name == "Nested Author"
+
+    def test_channel_defaults(self):
+        model, err = validate_podcast_config({"title": "T", "description": "D"})
+        assert err is None
+        assert model.language == "en"
+        assert model.explicit is False
+
     def test_missing_description(self):
         _, err = validate_podcast_config({"title": "Only Title"})
         assert err is not None

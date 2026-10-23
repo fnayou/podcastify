@@ -40,35 +40,6 @@ class TestLoadYaml:
         assert any(record.levelname == "ERROR" for record in caplog.records)
 
 
-class TestExtractPodcastMetadata:
-    def test_flat_config(self, sample_flat_config):
-        meta = ConfigurationManager.extract_podcast_metadata(sample_flat_config)
-        assert meta["title"] == "My Show"
-        assert meta["author-name"] == "Test Author"
-
-    def test_nested_config(self, sample_nested_config):
-        meta = ConfigurationManager.extract_podcast_metadata(sample_nested_config)
-        assert meta["title"] == "Nested Show"
-        assert meta["author-name"] == "Nested Author"
-
-    def test_legacy_author_field(self, sample_legacy_config):
-        meta = ConfigurationManager.extract_podcast_metadata(sample_legacy_config)
-        assert meta["author-name"] == "Legacy Author"
-
-    def test_missing_optional_fields(self):
-        config = {"title": "Minimal"}
-        meta = ConfigurationManager.extract_podcast_metadata(config)
-        assert meta["title"] == "Minimal"
-        assert "author-name" not in meta
-
-    def test_partial_fields(self):
-        config = {"title": "Partial", "author-name": "Author", "explicit": True}
-        meta = ConfigurationManager.extract_podcast_metadata(config)
-        assert meta["title"] == "Partial"
-        assert meta["author-name"] == "Author"
-        assert meta["explicit"] is True
-
-
 class TestDiscoverPodcastConfigs:
     def test_finds_configs(self, tmp_path, monkeypatch):
         monkeypatch.setattr("podcastify.config.Config.PODCASTS_ROOT", tmp_path)

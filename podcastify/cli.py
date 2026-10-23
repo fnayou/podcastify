@@ -84,9 +84,7 @@ class PodcastProcessor:
                 logger.info("Create directory and place MP3 files there")
                 return False
 
-            discovered = self.episode_manager.discover_episodes(
-                podcast_name, cfg, validated
-            )
+            discovered = self.episode_manager.discover_episodes(podcast_name, validated)
             episodes = []
             for e in discovered:
                 if Path(e.get("__resolved_path", "")).exists():
