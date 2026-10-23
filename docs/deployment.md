@@ -14,6 +14,7 @@ docker run --rm \
   -p ${HOST_PORT}:8080 \
   -v "$(pwd)/public:/app/public" \
   -v "$(pwd)/podcasts:/app/podcasts" \
+  -v "$(pwd)/cache:/app/.cache" \
   fnayou/podcastify:latest
 ```
 
@@ -30,11 +31,16 @@ services:
       - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://localhost:${HOST_PORT:-8080}}
       - PODCASTS_ROOT=/app/podcasts
       - PUBLIC_ROOT=/app/public
+      - CACHE_ROOT=/app/.cache
       - RUN_ON_START=${RUN_ON_START:-true}
       - PUBLISH_XML=${PUBLISH_XML:-true}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
     volumes:
       - ./public:/app/public
       - ./podcasts:/app/podcasts
+      - ./cache:/app/.cache
     restart: unless-stopped
 ```
 
@@ -46,6 +52,9 @@ SERVICE_PORT=8080
 PUBLIC_BASE_URL=http://localhost:${HOST_PORT}
 RUN_ON_START=true
 PUBLISH_XML=true
+LOG_LEVEL=INFO
+PUID=1000
+PGID=1000
 ```
 
 ## Environment Variables
@@ -57,10 +66,12 @@ PUBLISH_XML=true
 | `PUBLIC_BASE_URL` | `http://localhost:8080` | Base URL used in generated enclosure and image links. |
 | `PODCASTS_ROOT` | `/app/podcasts` | In-container path to podcast configs. |
 | `PUBLIC_ROOT` | `/app/public` | In-container path to media and generated feeds. |
+| `CACHE_ROOT` | `/app/.cache` | In-container path to the ffprobe duration cache and Caddy state. Not served over HTTP. |
+| `PUID` | `1000` | uid the container drops to when started as root. Match the owner of the bind-mounts. |
+| `PGID` | `1000` | gid the container drops to when started as root. |
 | `RUN_ON_START` | `true` | Run generator on container startup. |
 | `PUBLISH_XML` | `true` | Write XML files to disk. |
 | `LOG_LEVEL` | `INFO` | Logging verbosity: `DEBUG`, `INFO`, `WARNING`, or `ERROR`. |
-| `OPENCODE_CONFIG` | `.opencode/opencode.json` | Path to [OpenCode](https://opencode.ai) config (agents, skills, instructions). Contributor-only; not required to run the container. |
 
 ## Log Visibility
 
@@ -68,8 +79,8 @@ The podcastify generator logs at different levels. The visibility depends on how
 
 | How generator runs | In `docker compose logs -f`? | Why |
 |---|---|---|
-| Boot, `RUN_ON_START=true` | YES | entrypoint runs generator as PID-1 chain before `exec supervisord`; stdout inherited by container |
-| Caddy / supervisord | YES | `supervisord.conf:10-13` forwards `/dev/stdout`+`/dev/stderr`, `maxbytes=0` |
+| Boot, `RUN_ON_START=true` | YES | `entrypoint.sh` runs the generator before `exec`-ing `tini`; stdout is inherited by the container |
+| Caddy | YES | Caddy runs in the foreground under `tini` and logs to stdout |
 | `docker compose exec podcastify python /app/app.py generate` | NO | separate process attached to the exec client's terminal, not PID 1 — prints in your shell |
 | `docker compose run --rm ...` | NO | separate temporary container, its own log stream |
 
@@ -107,12 +118,16 @@ server {
 
 ## Security Hardening
 
-For v1.0.0 and later, add these Compose settings without changing the image:
+The image supports two runtimes (see [runtime](runtime.md)):
+
+- **Default:** starts as root, chowns `public/`, `podcasts/` and `.cache/` to `PUID`/`PGID`, then drops privileges with `su-exec`. Needs the `CHOWN`, `SETUID` and `SETGID` capabilities, so do not combine it with `cap_drop: ["ALL"]`.
+- **Hardened:** pin the container user. The entrypoint then skips chown and `su-exec`. The bind-mounts must already be owned by that uid.
 
 ```yaml
 services:
   podcastify:
     # ... existing config ...
+    user: "1000:1000"
     read_only: true
     tmpfs:
       - /tmp
@@ -121,7 +136,7 @@ services:
     cap_drop: ["ALL"]
 ```
 
-Root filesystem read-only. Mounted `public/` + `podcasts/` stay writable. Prevents privilege escalation; drops Linux capabilities. Note: generator writes cache + temp files to `PUBLIC_ROOT` — any hardening must keep `public/` writable.
+The root filesystem is read-only. `public/`, `podcasts/` and `cache/` stay writable bind-mounts, and Caddy keeps its data under `CACHE_ROOT`. The cache is outside `public/`, so it is never served.
 
 ## Caddyfile
 
