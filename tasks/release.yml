@@ -1,0 +1,39 @@
+version: "3"
+
+vars:
+  CLIFF_IMAGE: orhunp/git-cliff:2.14.2
+  FIRST_COMMIT: f1e964de
+
+tasks:
+  changelog:
+    desc: Preview the GitHub Release notes with the CI config and range (needs Docker; TAG=vYYYY.M.PATCH optional)
+    silent: true
+    vars:
+      TAG: '{{.TAG | default "next"}}'
+    cmds:
+      - |
+        TAG="{{.TAG}}"
+        if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+          END="${TAG}"
+          SELF="$(printf '%s' "${TAG}" | sed 's/\./\\./g')"
+          TAG_PATTERN="^${SELF}\$"
+        else
+          END=HEAD
+          TAG_PATTERN='^$'
+        fi
+        if [[ "${TAG}" == *-* ]]; then
+          PATTERN='^v20[0-9]{2}\.[0-9]+\.[0-9]+(-.*)?$'
+        else
+          PATTERN='^v20[0-9]{2}\.[0-9]+\.[0-9]+$'
+        fi
+        PREV="$(git log --simplify-by-decoration --format=%D "${END}^" 2>/dev/null | tr ',' '\n' | sed -n 's/^ *tag: //p' | grep -E "${PATTERN}" | head -n 1 || true)"
+        START="${PREV:-{{.FIRST_COMMIT}}}"
+        echo "Notes range: ${START}..${END}" >&2
+        GIT_COMMON="$(git rev-parse --path-format=absolute --git-common-dir)"
+        docker run --rm \
+          --user "$(id -u):$(id -g)" \
+          -v "${PWD}:${PWD}:ro" \
+          -v "${GIT_COMMON}:${GIT_COMMON}:ro" \
+          -w "${PWD}" \
+          {{.CLIFF_IMAGE}} \
+          --config cliff.toml --tag-pattern "${TAG_PATTERN}" "${START}..${END}"
