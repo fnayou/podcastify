@@ -23,7 +23,7 @@ class TestDiscoverEpisodes:
         pub_dir.mkdir()
         (pub_dir / "ep01.mp3").write_bytes(b"\x00")
         episodes = EpisodeManager.discover_episodes("myshow", _validated([]))
-        assert [e["file"] for e in episodes] == ["ep01.mp3"]
+        assert [e.model.file for e in episodes] == ["ep01.mp3"]
 
     def test_explicit_list_wins_over_scan(self, tmp_path, monkeypatch):
         monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
@@ -32,7 +32,7 @@ class TestDiscoverEpisodes:
         (pub_dir / "ep01.mp3").write_bytes(b"\x00")
         (pub_dir / "ep02.mp3").write_bytes(b"\x00")
         episodes = EpisodeManager.discover_episodes("myshow", _validated([{"file": "ep02.mp3"}]))
-        assert [e["file"] for e in episodes] == ["ep02.mp3"]
+        assert [e.model.file for e in episodes] == ["ep02.mp3"]
 
     def test_explicit_episodes(self, tmp_path, monkeypatch, sample_flat_config):
         monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
@@ -43,8 +43,9 @@ class TestDiscoverEpisodes:
         assert err is None
         episodes = EpisodeManager.discover_episodes("myshow", model)
         assert len(episodes) == 1
-        assert episodes[0]["file"] == "ep01.mp3"
-        assert "__resolved_path" in episodes[0]
+        assert episodes[0].model.file == "ep01.mp3"
+        assert episodes[0].path == pub_dir / "ep01.mp3"
+        assert episodes[0].model.title == "Episode 1"
 
     def test_auto_scan(self, tmp_path, monkeypatch):
         monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
@@ -54,8 +55,8 @@ class TestDiscoverEpisodes:
         (pub_dir / "ep02.mp3").write_bytes(b"\x00" * 64)
         episodes = EpisodeManager.discover_episodes("myshow")
         assert len(episodes) == 2
-        assert episodes[0]["file"] == "ep01.mp3"
-        assert episodes[1]["file"] == "ep02.mp3"
+        assert episodes[0].model.file == "ep01.mp3"
+        assert episodes[1].model.file == "ep02.mp3"
 
     def test_auto_scan_missing_dir(self, tmp_path, monkeypatch):
         monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
@@ -69,7 +70,7 @@ class TestDiscoverEpisodes:
         (pub_dir / "episode.mp3").write_bytes(b"\x00" * 64)
         model = _validated([{"file": "episode.mp3"}])
         episodes = EpisodeManager.discover_episodes("myshow", model)
-        assert episodes[0]["__resolved_path"] == pub_dir / "episode.mp3"
+        assert episodes[0].path == pub_dir / "episode.mp3"
 
     def test_explicit_uses_basename_only(self, tmp_path, monkeypatch):
         monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
@@ -78,9 +79,8 @@ class TestDiscoverEpisodes:
         (pub_dir / "episode.mp3").write_bytes(b"\x00" * 64)
         model = _validated([{"file": "/some/path/episode.mp3"}])
         episodes = EpisodeManager.discover_episodes("myshow", model)
-        # original file value stays as-is; only __resolved_path uses basename
-        assert episodes[0]["file"] == "/some/path/episode.mp3"
-        assert episodes[0]["__resolved_path"] == pub_dir / "episode.mp3"
+        assert episodes[0].model.file == "/some/path/episode.mp3"
+        assert episodes[0].path == pub_dir / "episode.mp3"
 
 
 class TestMediaScan:
@@ -91,7 +91,7 @@ class TestMediaScan:
         pub_dir.mkdir()
         (pub_dir / name).write_bytes(b"\x00")
         episodes = EpisodeManager.discover_episodes("myshow")
-        assert [e["file"] for e in episodes] == [name]
+        assert [e.model.file for e in episodes] == [name]
 
     def test_other_files_and_directories_are_ignored(self, tmp_path, monkeypatch):
         monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
@@ -102,7 +102,7 @@ class TestMediaScan:
         (pub_dir / "folder.mp3").mkdir()
         (pub_dir / "ep.mp3").write_bytes(b"\x00")
         episodes = EpisodeManager.discover_episodes("myshow")
-        assert [e["file"] for e in episodes] == ["ep.mp3"]
+        assert [e.model.file for e in episodes] == ["ep.mp3"]
 
     def test_mixed_case_order_is_stable(self, tmp_path, monkeypatch):
         monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
@@ -111,7 +111,7 @@ class TestMediaScan:
         for name in ("b.mp3", "A.MP3", "c.mp3"):
             (pub_dir / name).write_bytes(b"\x00")
         episodes = EpisodeManager.discover_episodes("myshow")
-        assert [e["file"] for e in episodes] == ["A.MP3", "b.mp3", "c.mp3"]
+        assert [e.model.file for e in episodes] == ["A.MP3", "b.mp3", "c.mp3"]
 
 
 class TestMediaType:
@@ -140,7 +140,7 @@ class TestPublished:
         (pub_dir / "ep.mp3").write_bytes(b"\x00")
         model = _validated([{"file": "ep.mp3", "pub_date": "2025-01-01T08:00:00"}])
         episodes = EpisodeManager.discover_episodes("myshow", model)
-        assert episodes[0]["__published"] == datetime(2025, 1, 1, 8, tzinfo=timezone.utc)
+        assert episodes[0].published == datetime(2025, 1, 1, 8, tzinfo=timezone.utc)
 
     def test_mtime_fallback(self, tmp_path, monkeypatch):
         monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
@@ -151,7 +151,7 @@ class TestPublished:
         os.utime(mp3, (1700000000, 1700000000))
         model = _validated([{"file": "ep.mp3"}])
         episodes = EpisodeManager.discover_episodes("myshow", model)
-        assert episodes[0]["__published"] == datetime.fromtimestamp(1700000000, tz=timezone.utc)
+        assert episodes[0].published == datetime.fromtimestamp(1700000000, tz=timezone.utc)
 
     def test_auto_scan_uses_mtime(self, tmp_path, monkeypatch):
         monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
@@ -161,14 +161,14 @@ class TestPublished:
         mp3.write_bytes(b"\x00")
         os.utime(mp3, (1700000000, 1700000000))
         episodes = EpisodeManager.discover_episodes("myshow")
-        assert episodes[0]["__published"] == datetime.fromtimestamp(1700000000, tz=timezone.utc)
+        assert episodes[0].published == datetime.fromtimestamp(1700000000, tz=timezone.utc)
 
     def test_missing_file_falls_back_to_epoch(self, tmp_path, monkeypatch):
         monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
         (tmp_path / "myshow").mkdir()
         model = _validated([{"file": "gone.mp3"}])
         episodes = EpisodeManager.discover_episodes("myshow", model)
-        assert episodes[0]["__published"] == datetime.fromtimestamp(0, tz=timezone.utc)
+        assert episodes[0].published == datetime.fromtimestamp(0, tz=timezone.utc)
 
 
 class TestMediaUrl:
@@ -205,7 +205,7 @@ class TestResolveImageUrl:
         pub_dir = tmp_path / "myshow"
         pub_dir.mkdir()
         (pub_dir / "cover art #1.jpg").write_bytes(b"\x00" * 64)
-        result = EpisodeManager.resolve_image_url("myshow", {"image": "cover art #1.jpg"})
+        result = EpisodeManager.resolve_image_url("myshow", "cover art #1.jpg")
         assert result == "https://example.com/myshow/cover%20art%20%231.jpg"
 
     def test_local_file_exists(self, tmp_path, monkeypatch):
@@ -214,28 +214,28 @@ class TestResolveImageUrl:
         pub_dir = tmp_path / "myshow"
         pub_dir.mkdir()
         (pub_dir / "cover.jpg").write_bytes(b"\x00" * 64)
-        result = EpisodeManager.resolve_image_url("myshow", {"image": "cover.jpg"})
+        result = EpisodeManager.resolve_image_url("myshow", "cover.jpg")
         assert result == "http://localhost:8080/myshow/cover.jpg"
 
     def test_local_file_missing(self, tmp_path, monkeypatch, caplog):
         monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
         pub_dir = tmp_path / "myshow"
         pub_dir.mkdir()
-        result = EpisodeManager.resolve_image_url("myshow", {"image": "missing.jpg"})
+        result = EpisodeManager.resolve_image_url("myshow", "missing.jpg")
         assert result is None
         warnings = [r.message for r in caplog.records if r.levelname == "WARNING"]
         assert warnings == [f"Image file not found: {pub_dir / 'missing.jpg'}"]
 
     def test_absolute_url(self, tmp_path, monkeypatch):
         monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
-        result = EpisodeManager.resolve_image_url("myshow", {"image": "https://example.com/cover.jpg"})
+        result = EpisodeManager.resolve_image_url("myshow", "https://example.com/cover.jpg")
         assert result == "https://example.com/cover.jpg"
 
     def test_no_image(self):
-        result = EpisodeManager.resolve_image_url("myshow", {})
+        result = EpisodeManager.resolve_image_url("myshow", None)
         assert result is None
 
     def test_http_url(self, tmp_path, monkeypatch):
         monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
-        result = EpisodeManager.resolve_image_url("myshow", {"image": "http://example.com/cover.jpg"})
+        result = EpisodeManager.resolve_image_url("myshow", "http://example.com/cover.jpg")
         assert result == "http://example.com/cover.jpg"

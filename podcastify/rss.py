@@ -1,22 +1,28 @@
 import hashlib
 import logging
 import re
+import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
-from xml.sax.saxutils import escape
-
-from podcastify.config import Config, _coerce_bool
+from podcastify.config import Config
 from podcastify.media import MediaProcessor
 from podcastify.parser import (
+    Episode,
     EpisodeManager,
+    PodcastChannelModel,
     rfc2822_date,
 )
 
 logger = logging.getLogger(__name__)
 
 _ILLEGAL_XML_CHARS = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f￾￿]")
+
+ITUNES_NS = "http://www.itunes.com/dtds/podcast-1.0.dtd"
+IT = f"{{{ITUNES_NS}}}"
+EPISODE_TYPES = ("full", "trailer", "bonus")
+
+ET.register_namespace("itunes", ITUNES_NS)
 
 
 class RSSGenerator:
@@ -25,209 +31,141 @@ class RSSGenerator:
         return _ILLEGAL_XML_CHARS.sub("", value)
 
     @classmethod
-    def xml_escape(cls, value: Any) -> str:
-        return escape(cls.strip_illegal_xml_chars(str(value)), {'"': "&quot;"}) if value is not None else ""
+    def _add(
+        cls,
+        parent: ET.Element,
+        tag: str,
+        text: Optional[str] = None,
+        attrib: Optional[Dict[str, str]] = None,
+    ) -> ET.Element:
+        element = ET.SubElement(
+            parent, tag, {key: cls.strip_illegal_xml_chars(value) for key, value in (attrib or {}).items()}
+        )
+        if text is not None:
+            element.text = cls.strip_illegal_xml_chars(text)
+        return element
+
+    @staticmethod
+    def _non_blank(value: str) -> Optional[str]:
+        return value if value.strip() else None
 
     @classmethod
-    def cdata(cls, value: str) -> str:
-        return "<![CDATA[" + cls.strip_illegal_xml_chars(value).replace("]]>", "]]]]><![CDATA[>") + "]]>"
-
-    @classmethod
-    def build_itunes_categories(cls, categories: Union[str, List[Any], Dict[str, Any]]) -> str:
-        if not categories:
-            return ""
-
-        esc_attr = cls.xml_escape
-        cats_xml: List[str] = []
-
-        def add_category(parent: Optional[str], subcategory: Optional[str] = None) -> None:
-            if not isinstance(parent, str) or not parent.strip():
+    def _add_categories(cls, parent: ET.Element, categories: Union[str, List[Any], Dict[str, Any], None]) -> None:
+        def add_category(name: Any, sub: Any = None) -> None:
+            if not isinstance(name, str) or not name.strip():
                 return
-            if isinstance(subcategory, str) and subcategory.strip():
-                cats_xml.append(
-                    f'    <itunes:category text="{esc_attr(parent)}">\n'
-                    f'      <itunes:category text="{esc_attr(subcategory)}"/>\n'
-                    f"    </itunes:category>"
-                )
-            else:
-                cats_xml.append(f'    <itunes:category text="{esc_attr(parent)}"/>')
+            category = cls._add(parent, f"{IT}category", attrib={"text": name})
+            if isinstance(sub, str) and sub.strip():
+                cls._add(category, f"{IT}category", attrib={"text": sub})
 
-        if isinstance(categories, str):
-            add_category(categories)
-        elif isinstance(categories, list):
-            for item in categories:
-                if isinstance(item, str):
-                    add_category(item)
-                elif isinstance(item, (list, tuple)) and len(item) >= 2:
-                    parent = item[0] if isinstance(item[0], str) else None
-                    sub = item[1] if isinstance(item[1], str) else None
-                    add_category(parent, sub)
-                elif isinstance(item, dict):
-                    parent = item.get("name")
-                    sub = item.get("sub")
-                    parent_s = parent if isinstance(parent, str) else None
-                    sub_s = sub if isinstance(sub, str) else None
-                    add_category(parent_s, sub_s)
-        elif isinstance(categories, dict):
-            parent = categories.get("name")
-            sub = categories.get("sub")
-            parent_s = parent if isinstance(parent, str) else None
-            sub_s = sub if isinstance(sub, str) else None
-            add_category(parent_s, sub_s)
+        for item in categories if isinstance(categories, list) else [categories]:
+            if isinstance(item, str):
+                add_category(item)
+            elif isinstance(item, (list, tuple)) and len(item) >= 2:
+                add_category(item[0], item[1])
+            elif isinstance(item, dict):
+                add_category(item.get("name"), item.get("sub"))
 
-        return "\n".join(cats_xml)
-
-    def generate_feed_xml(self, podcast_name: str, metadata: Dict[str, Any], episodes: List[Dict[str, Any]]) -> str:
+    def generate_feed_xml(self, podcast_name: str, channel: PodcastChannelModel, episodes: List[Episode]) -> str:
         logger.debug(f"Render channel: {podcast_name}")
-        now = rfc2822_date(datetime.now(timezone.utc))
-        channel_xml = self._build_channel_metadata(podcast_name, metadata, now)
-        items_xml = []
-        for e in episodes:
-            logger.debug(f"Build episode item: {e.get('file', 'unknown')}")
-            items_xml.append(self._build_episode_item(podcast_name, e, metadata))
-        return f"""<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
-  <channel>
-{channel_xml}
-{chr(10).join(items_xml)}
-  </channel>
-</rss>"""
+        rss = ET.Element("rss", {"version": "2.0"})
+        channel_element = self._build_channel(rss, podcast_name, channel)
+        for episode in episodes:
+            logger.debug(f"Build episode item: {episode.model.file}")
+            self._build_item(channel_element, podcast_name, episode, channel)
+        ET.indent(rss, space="  ")
+        return ET.tostring(rss, encoding="unicode", xml_declaration=True)
 
-    def _build_channel_metadata(self, podcast_name: str, metadata: Dict[str, Any], timestamp: str) -> str:
-        esc = self.xml_escape
-        title = metadata.get("title") or podcast_name
-        link = metadata.get("link") or Config.BASE_URL
-        description = metadata.get("description") or ""
-        subtitle = metadata.get("subtitle")
-        summary = metadata.get("summary") or description
-        language = metadata.get("language") or "en"
-        explicit = _coerce_bool(metadata.get("explicit"), False)
-        author = metadata.get("author-name") or ""
-        owner_name = metadata.get("author-name") or ""
-        owner_email = metadata.get("author-email") or ""
+    def _build_channel(self, rss: ET.Element, podcast_name: str, channel: PodcastChannelModel) -> ET.Element:
+        add = self._add
+        element = add(rss, "channel")
+        add(element, "title", channel.title or podcast_name)
+        add(element, "link", channel.link or Config.BASE_URL)
+        add(element, "description", self._non_blank(channel.description))
+        add(element, "language", channel.language)
+        add(element, "generator", "podcastify")
+        add(element, "lastBuildDate", rfc2822_date(datetime.now(timezone.utc)))
+        add(element, f"{IT}explicit", "yes" if channel.explicit else "no")
+        add(element, f"{IT}author", channel.author_name or None)
 
-        parts: List[str] = [
-            f"    <title>{esc(title)}</title>",
-            f"    <link>{esc(link)}</link>",
-            f"    <description>{self.cdata(description)}</description>"
-            if description.strip()
-            else "    <description></description>",
-            f"    <language>{esc(language)}</language>",
-            "    <generator>podcastify</generator>",
-            f"    <lastBuildDate>{timestamp}</lastBuildDate>",
-            f"    <itunes:explicit>{'yes' if explicit else 'no'}</itunes:explicit>",
-            f"    <itunes:author>{esc(author)}</itunes:author>",
-        ]
+        if channel.subtitle:
+            add(element, f"{IT}subtitle", channel.subtitle)
+        add(element, f"{IT}summary", self._non_blank(channel.summary or channel.description))
 
-        if subtitle:
-            parts.append(f"    <itunes:subtitle>{esc(subtitle)}</itunes:subtitle>")
+        image = EpisodeManager.resolve_image_url(podcast_name, channel.image)
+        if image:
+            add(element, f"{IT}image", attrib={"href": image})
 
-        if summary and summary.strip():
-            parts.append(f"    <itunes:summary>{self.cdata(summary)}</itunes:summary>")
-        else:
-            parts.append("    <itunes:summary></itunes:summary>")
+        if channel.author_name or channel.author_email:
+            owner = add(element, f"{IT}owner")
+            if channel.author_name:
+                add(owner, f"{IT}name", channel.author_name)
+            if channel.author_email:
+                add(owner, f"{IT}email", channel.author_email)
 
-        img_url = EpisodeManager.resolve_image_url(podcast_name, metadata)
-        if img_url:
-            parts.append(f'    <itunes:image href="{esc(img_url)}"/>')
+        self._add_categories(element, channel.categories)
 
-        if owner_name or owner_email:
-            owner = ["    <itunes:owner>"]
-            if owner_name:
-                owner.append(f"      <itunes:name>{esc(owner_name)}</itunes:name>")
-            if owner_email:
-                owner.append(f"      <itunes:email>{esc(owner_email)}</itunes:email>")
-            owner.append("    </itunes:owner>")
-            parts.append("\n".join(owner))
+        if channel.type:
+            add(element, f"{IT}type", channel.type)
+        if channel.block:
+            add(element, f"{IT}block", "yes")
+        if channel.complete:
+            add(element, f"{IT}complete", "yes")
+        if channel.new_feed_url:
+            add(element, f"{IT}new-feed-url", channel.new_feed_url)
+        return element
 
-        cats = self.build_itunes_categories(metadata.get("categories"))
-        if cats:
-            parts.append(cats)
-
-        ptype = metadata.get("type")
-        if ptype in ("episodic", "serial"):
-            parts.append(f"    <itunes:type>{ptype}</itunes:type>")
-
-        if metadata.get("block"):
-            parts.append("    <itunes:block>yes</itunes:block>")
-
-        if metadata.get("complete"):
-            parts.append("    <itunes:complete>yes</itunes:complete>")
-
-        new_feed_url = metadata.get("new_feed_url")
-        if new_feed_url:
-            parts.append(f"    <itunes:new-feed-url>{esc(new_feed_url)}</itunes:new-feed-url>")
-
-        return "\n".join(parts)
-
-    def _build_episode_item(self, podcast_name: str, episode: Dict[str, Any], channel_meta: Dict[str, Any]) -> str:
-        esc = self.xml_escape
-        file_path = episode.get("__resolved_path")
-        if not isinstance(file_path, Path):
-            file_path = Path(str(file_path))
-
-        fname = file_path.name
-        media_url = EpisodeManager.media_url(podcast_name, fname)
-
+    def _build_item(
+        self, parent: ET.Element, podcast_name: str, episode: Episode, channel: PodcastChannelModel
+    ) -> None:
+        add = self._add
+        model = episode.model
+        path = episode.path
+        description = model.description or ""
+        explicit = channel.explicit if model.explicit is None else model.explicit
+        duration = model.duration_hms or MediaProcessor.format_itunes_duration(
+            MediaProcessor.get_duration_seconds(path)
+        )
         try:
-            stat_result = file_path.stat()
-        except (OSError, FileNotFoundError):
-            stat_result = None
+            length = path.stat().st_size
+        except OSError:
+            length = 0
 
-        length = stat_result.st_size if stat_result else 0
+        item = add(parent, "item")
+        add(
+            item,
+            "guid",
+            model.guid or hashlib.sha1(f"{podcast_name}/{path.name}".encode("utf-8")).hexdigest(),
+            {"isPermaLink": "false"},
+        )
+        add(item, "title", model.title or path.stem)
+        add(item, "description", self._non_blank(description))
+        add(item, "pubDate", rfc2822_date(episode.published))
+        add(
+            item,
+            "enclosure",
+            attrib={
+                "url": EpisodeManager.media_url(podcast_name, path.name),
+                "length": str(length),
+                "type": EpisodeManager.media_type(path),
+            },
+        )
+        add(item, f"{IT}explicit", "yes" if explicit else "no")
+        add(item, f"{IT}author", model.author_name or channel.author_name or None)
 
-        pub_dt = episode["__published"]
+        if duration:
+            add(item, f"{IT}duration", duration)
+        if model.subtitle:
+            add(item, f"{IT}subtitle", model.subtitle)
+        add(item, f"{IT}summary", self._non_blank(model.summary or description))
 
-        guid_val = episode.get("guid") or hashlib.sha1(f"{podcast_name}/{fname}".encode("utf-8")).hexdigest()
+        image = EpisodeManager.resolve_image_url(podcast_name, model.image)
+        if image:
+            add(item, f"{IT}image", attrib={"href": image})
 
-        title = episode.get("title") or file_path.stem
-        desc = episode.get("description") or ""
-        summary = episode.get("summary") or desc
-        subtitle = episode.get("subtitle")
-        author = episode.get("author-name") or channel_meta.get("author-name", "")
-        explicit = episode.get("explicit")
-        explicit = _coerce_bool(channel_meta.get("explicit")) if explicit is None else _coerce_bool(explicit)
-
-        dur_hms = episode.get("duration_hms")
-        if not dur_hms:
-            dur_sec = MediaProcessor.get_duration_seconds(file_path)
-            dur_hms = MediaProcessor.format_itunes_duration(dur_sec)
-
-        parts: List[str] = [
-            "    <item>",
-            f'      <guid isPermaLink="false">{esc(guid_val)}</guid>',
-            f"      <title>{esc(title)}</title>",
-            f"      <description>{self.cdata(desc)}</description>"
-            if desc.strip()
-            else "      <description></description>",
-            f"      <pubDate>{rfc2822_date(pub_dt)}</pubDate>",
-            f'      <enclosure url="{esc(media_url)}" length="{length}" type="{EpisodeManager.media_type(file_path)}"/>',
-            f"      <itunes:explicit>{'yes' if explicit else 'no'}</itunes:explicit>",
-            f"      <itunes:author>{esc(author)}</itunes:author>",
-        ]
-
-        if dur_hms:
-            parts.append(f"      <itunes:duration>{esc(dur_hms)}</itunes:duration>")
-        if subtitle:
-            parts.append(f"      <itunes:subtitle>{esc(subtitle)}</itunes:subtitle>")
-        if summary and summary.strip():
-            parts.append(f"      <itunes:summary>{self.cdata(summary)}</itunes:summary>")
-        else:
-            parts.append("      <itunes:summary></itunes:summary>")
-
-        ep_img = EpisodeManager.resolve_image_url(podcast_name, episode)
-        if ep_img:
-            parts.append(f'      <itunes:image href="{esc(ep_img)}"/>')
-
-        season = episode.get("season")
-        if isinstance(season, int):
-            parts.append(f"      <itunes:season>{season}</itunes:season>")
-        ep_no = episode.get("episode")
-        if isinstance(ep_no, int):
-            parts.append(f"      <itunes:episode>{ep_no}</itunes:episode>")
-        ep_type = episode.get("episode_type")
-        if ep_type in ("full", "trailer", "bonus"):
-            parts.append(f"      <itunes:episodeType>{ep_type}</itunes:episodeType>")
-
-        parts.append("    </item>")
-        return "\n".join(parts)
+        if model.season is not None:
+            add(item, f"{IT}season", str(model.season))
+        if model.episode is not None:
+            add(item, f"{IT}episode", str(model.episode))
+        if model.episode_type in EPISODE_TYPES:
+            add(item, f"{IT}episodeType", model.episode_type)

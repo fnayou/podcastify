@@ -25,11 +25,12 @@ not covered there. Read both before proposing changes to `podcastify/`.
   (parser.py). Both forms must keep validating.
 - **Legacy `author` field**: `author` maps to `author-name` when `author-name`
   is absent, in `PodcastChannelModel.map_legacy_author` (parser.py).
-- **Metadata path**: `PodcastProcessor._build_metadata_from_model` (cli.py)
-  builds channel metadata from the validated model, limited to
-  `Config.CHANNEL_FIELDS`. `RSSGenerator` still re-defaults some values (for
-  example `language` to `en`), so a default changed in `PodcastChannelModel`
-  must be changed there too.
+- **Metadata path**: `RSSGenerator.generate_feed_xml` (rss.py) takes the
+  validated `PodcastChannelModel` and a list of `Episode` (model, resolved
+  path, published datetime) and builds an `ElementTree`. Field defaults live
+  in the models (for example `language` to `en`); the renderer only applies
+  fallbacks that need runtime data (`title` to the podcast name, `link` to
+  `PUBLIC_BASE_URL`, episode `title` to the file stem).
 - **Episode source priority**: an explicit `episodes:` list (validated via
   pydantic) wins over auto-scanning `public/<name>/` for `Config.MEDIA_TYPES`
   extensions, case-insensitive — `discover_episodes` (parser.py). The same map
@@ -54,9 +55,9 @@ not covered there. Read both before proposing changes to `podcastify/`.
   publishing run, `.*.xml.tmp` files older than 10 minutes are removed.
 - **Published datetime**: `EpisodeModel.pub_date` is parsed once in the model
   (date, datetime or ISO string; naive values are UTC; invalid values are
-  logged and dropped). `EpisodeManager.discover_episodes` stores
-  `__published` (`pub_date`, else file mtime in UTC). Sorting (cli.py) and
-  `<pubDate>` (rss.py) both read `__published`; newest first.
+  logged and dropped). `EpisodeManager.discover_episodes` sets
+  `Episode.published` (`pub_date`, else file mtime in UTC). Sorting (cli.py)
+  and `<pubDate>` (rss.py) both read `Episode.published`; newest first.
 - **Pipeline**: `PodcastProcessor.process_podcast` (cli.py) — load YAML →
   pydantic validate → extract metadata → require `public/<name>/` to exist →
   discover episodes → warm duration cache in parallel → sort → generate XML →

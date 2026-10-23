@@ -1,43 +1,43 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+<?xml version='1.0' encoding='utf-8'?>
+<rss xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" version="2.0">
   <channel>
     <title>Basic Show</title>
     <link>http://localhost:8080</link>
-    <description><![CDATA[A basic show]]></description>
+    <description>A basic show</description>
     <language>en</language>
     <generator>podcastify</generator>
     <lastBuildDate>Wed, 02 Jan 2030 03:04:05 +0000</lastBuildDate>
     <itunes:explicit>no</itunes:explicit>
     <itunes:author>Test Author</itunes:author>
     <itunes:subtitle>Short line</itunes:subtitle>
-    <itunes:summary><![CDATA[A basic show]]></itunes:summary>
+    <itunes:summary>A basic show</itunes:summary>
     <itunes:owner>
       <itunes:name>Test Author</itunes:name>
       <itunes:email>test@example.com</itunes:email>
     </itunes:owner>
-    <itunes:category text="Technology"/>
+    <itunes:category text="Technology" />
     <itunes:type>episodic</itunes:type>
     <item>
       <guid isPermaLink="false">a59514daa931c150fe2e464fefbc14026372ded3</guid>
       <title>Episode 2</title>
-      <description></description>
+      <description />
       <pubDate>Thu, 07 Jun 2029 00:00:00 +0000</pubDate>
-      <enclosure url="http://localhost:8080/basic/episode2.mp3" length="2000" type="audio/mpeg"/>
+      <enclosure url="http://localhost:8080/basic/episode2.mp3" length="2000" type="audio/mpeg" />
       <itunes:explicit>no</itunes:explicit>
       <itunes:author>Test Author</itunes:author>
       <itunes:duration>0:42</itunes:duration>
-      <itunes:summary></itunes:summary>
+      <itunes:summary />
     </item>
     <item>
       <guid isPermaLink="false">basic-guid-1</guid>
       <title>Episode 1</title>
-      <description><![CDATA[First episode]]></description>
+      <description>First episode</description>
       <pubDate>Sun, 06 May 2029 07:08:09 +0000</pubDate>
-      <enclosure url="http://localhost:8080/basic/episode1.mp3" length="1000" type="audio/mpeg"/>
+      <enclosure url="http://localhost:8080/basic/episode1.mp3" length="1000" type="audio/mpeg" />
       <itunes:explicit>no</itunes:explicit>
       <itunes:author>Test Author</itunes:author>
       <itunes:duration>00:10:00</itunes:duration>
-      <itunes:summary><![CDATA[First episode]]></itunes:summary>
+      <itunes:summary>First episode</itunes:summary>
       <itunes:season>1</itunes:season>
       <itunes:episode>1</itunes:episode>
       <itunes:episodeType>full</itunes:episodeType>

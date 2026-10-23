@@ -8,7 +8,7 @@ Podcastify is a Python **package** (`podcastify/`) + thin `app.py` entry point. 
 
 | Module | Class / fn | Responsibility |
 |---|---|---|
-| `podcastify/config.py` | `Config`, `_EnvVar` | Env-var descriptors, field whitelists. |
+| `podcastify/config.py` | `Config`, `_EnvVar` | Env-var descriptors, media types. |
 | `podcastify/media.py` | `MediaProcessor` | ffprobe duration extraction, persistent cache, iTunes formatting. |
 | `podcastify/parser.py` | `ConfigurationManager`, `EpisodeManager`, pydantic models | YAML load + validate, metadata extraction, episode/image discovery. |
 | `podcastify/rss.py` | `RSSGenerator` | iTunes-compatible XML feed generation. |
@@ -77,4 +77,4 @@ The generated RSS includes:
 - iTunes channel tags (`itunes:author`, `itunes:owner`, `itunes:image`, `itunes:category`, `itunes:explicit`)
 - iTunes item tags (`itunes:duration`, `itunes:episode`, `itunes:season`, `itunes:episodeType`)
 
-Empty values produce empty tags rather than CDATA blocks with whitespace.
+The feed is built as an `xml.etree.ElementTree` tree from the validated models, so all text and attributes are escaped by the standard library; characters XML does not allow are removed. Empty or blank values produce empty tags.

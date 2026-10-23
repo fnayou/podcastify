@@ -24,11 +24,6 @@ class TestConfigDefaults:
     def test_default_run_on_start(self):
         assert Config.RUN_ON_START is True
 
-    def test_channel_fields(self):
-        assert "name" in Config.CHANNEL_FIELDS
-        assert "title" in Config.CHANNEL_FIELDS
-        assert "categories" in Config.CHANNEL_FIELDS
-
 
 class TestConfigFromEnv:
     def test_custom_podcasts_root(self, monkeypatch):
