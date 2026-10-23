@@ -71,7 +71,6 @@ tasks:
         echo "docker: $(docker --version 2>/dev/null || echo missing)"
         echo "compose: $({{.COMPOSE}} version --short 2>/dev/null || echo missing)"
         {{.COMPOSE}} config --quiet >/dev/null 2>&1 || { echo "Compose file: INVALID"; ok=0; }
-        command -v ffprobe >/dev/null 2>&1 || echo "Note: ffprobe not on host (optional; used in container)"
         [ -d "{{.PUBLIC_DIR}}" ]   || { echo "Missing dir: {{.PUBLIC_DIR}}"; ok=0; }
         [ -d "{{.PODCASTS_DIR}}" ] || { echo "Missing dir: {{.PODCASTS_DIR}}"; ok=0; }
         [ $ok -eq 1 ] && echo "All good" || exit 1
