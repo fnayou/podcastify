@@ -29,7 +29,7 @@ Create private podcast feeds from your own MP3s with minimal setup. Drop MP3s in
 - Auto-discovery of episodes if you omit the `episodes:` list.
 - MP3 duration extraction via `ffprobe` (falls back gracefully).
 - iTunes fields: author, owner, subtitle, summary, explicit, categories, episode types, seasons.
-- Clean XML: stable GUIDs (SHA-1), configurable language, empty tags rather than empty CDATA.
+- Clean XML: stable GUIDs (SHA-1), configurable language, empty optional tags omitted, `atom:link rel="self"`, `itunes:explicit` as `true`/`false`.
 - Single container image: Caddy (static hosting) + Python generator.
 - Developer-friendly Taskfile (contributors only) with namespaced commands like `task docker:up`, `task podcastify:generate`.
 - Configurable ports: choose any host port (e.g., `1234`) via `.env` / Compose. Caddy listens on `${SERVICE_PORT}` inside the container.
