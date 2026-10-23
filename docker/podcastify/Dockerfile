@@ -32,8 +32,9 @@ COPY docker/podcastify/entrypoint.sh    /entrypoint.sh
 # Ensure entrypoint is executable and LF line endings
 RUN chmod 0755 /entrypoint.sh && sed -i 's/\r$//' /entrypoint.sh
 
-# Pre-create the writable dirs (normally bind-mounted at runtime). The
-# entrypoint chowns them to PUID/PGID before dropping privileges.
+# Pre-create the data dirs (normally bind-mounted at runtime). The entrypoint
+# chowns only what the app writes (cache, public/ itself, public/*.xml) to
+# PUID/PGID before dropping privileges.
 RUN mkdir -p /app/public /app/podcasts /app/.cache
 
 # Defaults (override via compose/.env)
