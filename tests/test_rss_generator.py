@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Tests for RSSGenerator class."""
 
+import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 
 import pytest
@@ -20,6 +21,9 @@ class TestXmlEscape:
 
     def test_int(self):
         assert RSSGenerator.xml_escape(42) == "42"
+
+    def test_removes_illegal_xml_chars(self):
+        assert RSSGenerator.xml_escape("a\x00b\x08c\x0bd\x0ce\x1ff￾g￿h\ti\nj") == "abcdefgh\ti\nj"
 
 
 class TestBuildItunesCategories:
@@ -175,3 +179,58 @@ class TestGenerateFeedXml:
         assert "<itunes:season>" not in item
         assert "<itunes:episode>" not in item
         assert "<itunes:episodeType>" not in item
+
+
+class TestFeedWellFormed:
+    HOSTILE = 'Tom & "Jerry" <b>bold</b> it\'s ]]> café 日本語 🎙️\x01\x0b￾ end'
+    CLEAN = 'Tom & "Jerry" <b>bold</b> it\'s ]]> café 日本語 🎙️ end'
+    ITUNES = "{http://www.itunes.com/dtds/podcast-1.0.dtd}"
+
+    def test_cdata_end_sequence_is_split(self):
+        channel = RSSGenerator()._build_channel_metadata(
+            "myshow",
+            {"title": "T", "description": "a]]>b"},
+            "Mon, 01 Jan 2024 00:00:00 +0000",
+        )
+        assert "<description><![CDATA[a]]]]><![CDATA[>b]]></description>" in channel
+
+    def test_hostile_text_produces_parseable_feed(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("podcastify.config.Config.PUBLIC_ROOT", tmp_path)
+        pub_dir = tmp_path / "myshow"
+        pub_dir.mkdir()
+        (pub_dir / "ep01.mp3").write_bytes(b"\x00" * 64)
+        xml = RSSGenerator().generate_feed_xml(
+            "myshow",
+            {
+                "title": self.HOSTILE,
+                "description": self.HOSTILE,
+                "summary": self.HOSTILE,
+                "subtitle": self.HOSTILE,
+                "author-name": self.HOSTILE,
+                "author-email": self.HOSTILE,
+                "categories": [[self.HOSTILE, self.HOSTILE]],
+            },
+            [
+                {
+                    "file": "ep01.mp3",
+                    "title": self.HOSTILE,
+                    "description": self.HOSTILE,
+                    "summary": self.HOSTILE,
+                    "subtitle": self.HOSTILE,
+                    "guid": self.HOSTILE,
+                    "duration_hms": self.HOSTILE,
+                    "__resolved_path": pub_dir / "ep01.mp3",
+                }
+            ],
+        )
+        channel = ET.fromstring(xml.encode("utf-8")).find("channel")
+        it = self.ITUNES
+        for tag in ("title", "description", f"{it}summary", f"{it}subtitle", f"{it}author",
+                    f"{it}owner/{it}name", f"{it}owner/{it}email"):
+            assert channel.find(tag).text == self.CLEAN
+        category = channel.find(f"{it}category")
+        assert category.get("text") == self.CLEAN
+        assert category.find(f"{it}category").get("text") == self.CLEAN
+        item = channel.find("item")
+        for tag in ("title", "description", "guid", f"{it}summary", f"{it}subtitle", f"{it}duration"):
+            assert item.find(tag).text == self.CLEAN

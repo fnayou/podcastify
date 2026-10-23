@@ -1,4 +1,5 @@
 import hashlib
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
@@ -16,20 +17,28 @@ from podcastify.parser import (
 
 logger = get_logger(__name__)
 
+_ILLEGAL_XML_CHARS = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f￾￿]")
+
 
 class RSSGenerator:
     @staticmethod
-    def xml_escape(value: Any) -> str:
-        return escape(str(value), {'"': "&quot;"}) if value is not None else ""
+    def strip_illegal_xml_chars(value: str) -> str:
+        return _ILLEGAL_XML_CHARS.sub("", value)
 
-    @staticmethod
-    def build_itunes_categories(categories: Union[str, List[Any], Dict[str, Any]]) -> str:
+    @classmethod
+    def xml_escape(cls, value: Any) -> str:
+        return escape(cls.strip_illegal_xml_chars(str(value)), {'"': "&quot;"}) if value is not None else ""
+
+    @classmethod
+    def cdata(cls, value: str) -> str:
+        return "<![CDATA[" + cls.strip_illegal_xml_chars(value).replace("]]>", "]]]]><![CDATA[>") + "]]>"
+
+    @classmethod
+    def build_itunes_categories(cls, categories: Union[str, List[Any], Dict[str, Any]]) -> str:
         if not categories:
             return ""
 
-        def esc_attr(value: str) -> str:
-            return escape(value, {'"': "&quot;"})
-
+        esc_attr = cls.xml_escape
         cats_xml: List[str] = []
 
         def add_category(parent: Optional[str], subcategory: Optional[str] = None) -> None:
@@ -105,7 +114,7 @@ class RSSGenerator:
         parts: List[str] = [
             f"    <title>{esc(title)}</title>",
             f"    <link>{esc(link)}</link>",
-            f"    <description><![CDATA[{description}]]></description>"
+            f"    <description>{self.cdata(description)}</description>"
             if description.strip()
             else "    <description></description>",
             f"    <language>{esc(language)}</language>",
@@ -119,7 +128,7 @@ class RSSGenerator:
             parts.append(f"    <itunes:subtitle>{esc(subtitle)}</itunes:subtitle>")
 
         if summary and summary.strip():
-            parts.append(f"    <itunes:summary><![CDATA[{summary}]]></itunes:summary>")
+            parts.append(f"    <itunes:summary>{self.cdata(summary)}</itunes:summary>")
         else:
             parts.append("    <itunes:summary></itunes:summary>")
 
@@ -214,7 +223,7 @@ class RSSGenerator:
             "    <item>",
             f'      <guid isPermaLink="false">{esc(guid_val)}</guid>',
             f"      <title>{esc(title)}</title>",
-            f"      <description><![CDATA[{desc}]]></description>"
+            f"      <description>{self.cdata(desc)}</description>"
             if desc.strip()
             else "      <description></description>",
             f"      <pubDate>{rfc2822_date(pub_dt)}</pubDate>",
@@ -224,11 +233,11 @@ class RSSGenerator:
         ]
 
         if dur_hms:
-            parts.append(f"      <itunes:duration>{dur_hms}</itunes:duration>")
+            parts.append(f"      <itunes:duration>{esc(dur_hms)}</itunes:duration>")
         if subtitle:
             parts.append(f"      <itunes:subtitle>{esc(subtitle)}</itunes:subtitle>")
         if summary and summary.strip():
-            parts.append(f"      <itunes:summary><![CDATA[{summary}]]></itunes:summary>")
+            parts.append(f"      <itunes:summary>{self.cdata(summary)}</itunes:summary>")
         else:
             parts.append("      <itunes:summary></itunes:summary>")
 
