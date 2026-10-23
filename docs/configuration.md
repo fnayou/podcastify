@@ -40,6 +40,8 @@ categories:
 | `complete` | boolean | No | If `true`, marks the podcast as complete (no new episodes). |
 | `new_feed_url` | string | No | Redirect URL for subscribers if the feed moves. |
 
+A key that is not listed here or under [Episode Fields](#episode-fields) is ignored, and a warning names it, for example `Unknown config key 'episodes[2].pubdate' ignored; check its spelling`. The config is still published.
+
 ## Categories Format
 
 Categories support flexible input:

@@ -152,12 +152,21 @@ class Episode:
     published: datetime
 
 
+def _unknown_keys(parsed: PodcastFileModel, channel: PodcastChannelModel) -> List[str]:
+    keys = [*(parsed.model_extra or {}), *(channel.model_extra or {})]
+    for index, episode in enumerate(channel.episodes or [], start=1):
+        keys += [f"episodes[{index}].{key}" for key in episode.model_extra or {}]
+    return keys
+
+
 def validate_podcast_config(raw: Dict[str, Any]) -> Tuple[Optional[PodcastChannelModel], Optional[str]]:
     try:
         parsed = PodcastFileModel.model_validate(raw)
         channel = parsed.podcast
         if channel is None:
             return None, "missing podcast configuration"
+        for key in _unknown_keys(parsed, channel):
+            logger.warning(f"Unknown config key '{key}' ignored; check its spelling")
         return channel, None
     except ValidationError as e:
         return None, str(e)

@@ -2,6 +2,7 @@
 """Tests for Pydantic config validation."""
 
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import pytest
 import yaml
@@ -67,6 +68,34 @@ class TestDuplicateEpisodes:
     def test_no_episodes_passes(self):
         model, err = validate_podcast_config({"title": "T", "description": "D"})
         assert err is None
+
+
+class TestUnknownKeys:
+    def _warnings(self, caplog):
+        return [r.message for r in caplog.records if r.levelname == "WARNING"]
+
+    def test_channel_typo_is_warned_and_ignored(self, caplog):
+        model, err = validate_podcast_config({"title": "T", "description": "D", "author_nmae": "A"})
+        assert err is None
+        assert model.author_name is None
+        assert self._warnings(caplog) == ["Unknown config key 'author_nmae' ignored; check its spelling"]
+
+    def test_episode_typo_names_the_episode(self, caplog):
+        model, err = _validate_episodes([{"file": "a.mp3"}, {"file": "b.mp3", "pubdate": "2025-01-01"}])
+        assert err is None
+        assert model.episodes[1].pub_date is None
+        assert self._warnings(caplog) == ["Unknown config key 'episodes[2].pubdate' ignored; check its spelling"]
+
+    def test_nested_sibling_key_is_warned(self, caplog, sample_nested_config):
+        model, err = validate_podcast_config({**sample_nested_config, "titel": "X"})
+        assert err is None
+        assert self._warnings(caplog) == ["Unknown config key 'titel' ignored; check its spelling"]
+
+    def test_template_keys_are_known(self, caplog):
+        template = Path(__file__).parent.parent / "templates" / "podcast-config-template.yaml"
+        model, err = validate_podcast_config(yaml.safe_load(template.read_text(encoding="utf-8")))
+        assert err is None
+        assert self._warnings(caplog) == []
 
 
 class TestPubDate:

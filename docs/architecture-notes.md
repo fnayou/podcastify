@@ -30,7 +30,9 @@ not covered there. Read both before proposing changes to `podcastify/`.
   path, published datetime) and builds an `ElementTree`. Field defaults live
   in the models (for example `language` to `en`); the renderer only applies
   fallbacks that need runtime data (`title` to the podcast name, `link` to
-  `PUBLIC_BASE_URL`, episode `title` to the file stem).
+  `PUBLIC_BASE_URL`, episode `title` to the file stem). Unknown YAML keys are
+  kept out of the feed and logged as warnings by `validate_podcast_config`
+  (parser.py).
 - **Episode source priority**: an explicit `episodes:` list (validated via
   pydantic) wins over auto-scanning `public/<name>/` for `Config.MEDIA_TYPES`
   extensions, case-insensitive — `discover_episodes` (parser.py). The same map
