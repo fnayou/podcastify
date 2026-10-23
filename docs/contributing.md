@@ -46,6 +46,10 @@ task podcastify:generate
 task docker:logs
 ```
 
+### Audio test fixtures
+
+Duration tests read the small files in `tests/fixtures/audio/` (1 s each). To rebuild them, run `tests/fixtures/make_audio.sh`; it needs Docker and runs ffmpeg in a throwaway container. CI does not run it, and the image has no ffmpeg. See [ADR 0006](adr/0006-tinytag-for-durations.md).
+
 ### Add a new podcast for testing
 
 ```bash

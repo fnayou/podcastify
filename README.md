@@ -27,7 +27,7 @@ Create private podcast feeds from your own MP3s with minimal setup. Drop MP3s in
 
 - Simple layout: `./podcasts/*.yaml` for configs, `./public/<name>/` for media and images.
 - Auto-discovery of episodes if you omit the `episodes:` list.
-- MP3 duration extraction via `ffprobe` (falls back gracefully).
+- Duration extraction for MP3, M4A, MP4, OGG and Opus with `tinytag` (pure Python; falls back gracefully).
 - iTunes fields: author, owner, subtitle, summary, explicit, categories, episode types, seasons.
 - Clean XML: stable GUIDs (SHA-1), configurable language, empty optional tags omitted, `atom:link rel="self"`, `itunes:explicit` as `true`/`false`.
 - Single container image: Caddy (static hosting) + Python generator.
@@ -236,7 +236,7 @@ Notes:
   - `[["Society & Culture", "Personal Journals"]]`
   - `[{ name: "Technology", sub: "Software How-To" }]`
 - If `pub_date` is missing or invalid, the file modification time is used.
-- Durations come from `ffprobe`; if that fails, the `<itunes:duration>` tag is omitted.
+- Durations are read from the media file with `tinytag`; if that fails, the `<itunes:duration>` tag is omitted.
 
 ---
 

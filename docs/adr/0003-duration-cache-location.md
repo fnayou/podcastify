@@ -4,7 +4,8 @@
 
 Accepted. Implemented: the cache lives under `CACHE_ROOT`, `MediaProcessor` drops
 entries for files that no longer exist when it saves, and a cache left in
-`PUBLIC_ROOT` is migrated on first load.
+`PUBLIC_ROOT` is migrated on first load. The on-disk format gained a version in
+[ADR 0006](0006-tinytag-for-durations.md).
 
 ## Context
 

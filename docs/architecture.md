@@ -9,7 +9,7 @@ Podcastify is a Python **package** (`podcastify/`) + thin `app.py` entry point. 
 | Module | Class / fn | Responsibility |
 |---|---|---|
 | `podcastify/config.py` | `Config`, `_EnvVar` | Env-var descriptors, media types. |
-| `podcastify/media.py` | `MediaProcessor` | ffprobe duration extraction, persistent cache, iTunes formatting. |
+| `podcastify/media.py` | `MediaProcessor` | tinytag duration extraction, persistent cache, iTunes formatting. |
 | `podcastify/parser.py` | `ConfigurationManager`, `EpisodeManager`, pydantic models | YAML load + validate, metadata extraction, episode/image discovery. |
 | `podcastify/rss.py` | `RSSGenerator` | iTunes-compatible XML feed generation. |
 | `podcastify/cli.py` | `PodcastProcessor`, `FeedWatcher`, `main` | Orchestration: load → validate → discover → generate → atomic write when the content changed; optional polling watcher that regenerates on config or media changes. |
@@ -54,11 +54,13 @@ Scans `./podcasts/` for files matching `<name>-podcast.yaml`. The `<name>` prefi
 ### Duration Extraction
 
 1. If `duration_hms` is set in episode config, use it directly.
-2. Otherwise, run `ffprobe -show_entries format=duration` on the MP3.
+2. Otherwise, read the duration of the media file with `tinytag`.
 3. Format as `H:MM:SS` or `M:SS` for iTunes compatibility.
-4. If ffprobe fails, the `<itunes:duration>` tag is omitted.
+4. If `tinytag` fails, or the result is not usable, the `<itunes:duration>` tag is omitted.
 
-Results are cached in memory by `(path, mtime)` and persisted to `<CACHE_ROOT>/.podcastify-cache.json` (`/app/.cache` in the image, outside the directory Caddy serves). Entries for files that no longer exist are dropped when the cache is saved, and a cache left in `PUBLIC_ROOT` by an older version is migrated on first load. See [ADR 0003](adr/0003-duration-cache-location.md).
+A result is not usable when it is not finite, is zero or negative, or is under 1 s for a file of at least 100 KB.
+
+Results are cached in memory by `(path, mtime)` and persisted to `<CACHE_ROOT>/.podcastify-cache.json` (`/app/.cache` in the image, outside the directory Caddy serves). The file holds a format version; entries in any other version are ignored, so every file is read again once. Entries for files that no longer exist are dropped when the cache is saved, and a cache left in `PUBLIC_ROOT` by an older version is migrated on first load. See [ADR 0003](adr/0003-duration-cache-location.md) and [ADR 0006](adr/0006-tinytag-for-durations.md).
 
 ### Image Resolution
 

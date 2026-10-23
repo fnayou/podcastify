@@ -4,8 +4,8 @@
 - **Episode**: one media file (`.mp3`, `.m4a`, `.mp4`, `.ogg` or `.opus`) + metadata, either listed explicitly under `episodes:` or auto-discovered from `public/<name>/`.
 - **Feed**: generated iTunes-compatible RSS 2.0 XML for a podcast.
 - **GUID**: episode unique ID. Defaults to SHA-1(`<podcast_name>/<filename>`), `isPermaLink="false"`.
-- **`duration_hms`**: episode duration as `H:MM:SS` or `M:SS`, either set in YAML or computed via `ffprobe`.
-- **Duration cache**: persisted ffprobe results at `<CACHE_ROOT>/.podcastify-cache.json` (`CACHE_ROOT` default `/app/.cache`), keyed by `(path, mtime)`.
+- **`duration_hms`**: episode duration as `H:MM:SS` or `M:SS`, either set in YAML or read from the media file with `tinytag`.
+- **Duration cache**: persisted `tinytag` results at `<CACHE_ROOT>/.podcastify-cache.json` (`CACHE_ROOT` default `/app/.cache`), keyed by `(path, mtime)`. The file carries a format version; a cache in another version is ignored and every file is read again once.
 - **`SERVICE_PORT`**: in-container Caddy listen port (env var, default `8080`). Separate from `HOST_PORT` (host-side mapping).
 - **`HOST_PORT`**: host port published to outside (compose only, default `8080`).
 - **`PUBLIC_BASE_URL`**: env var `PUBLIC_BASE_URL` (key); read into `Config.BASE_URL` (attribute). Embedded in RSS enclosure/image links. Default `http://localhost:8080`.
