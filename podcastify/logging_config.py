@@ -2,41 +2,20 @@ import logging
 import sys
 from typing import Optional
 
+from podcastify.config import Config
 
-_logger_cache = {}
+PACKAGE_LOGGER = "podcastify"
+VALID_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR"}
 
 
-def get_logger(name: str = "podcastify") -> logging.Logger:
-    """
-    Get or create a configured logger with idempotent handler setup.
-
-    WARNING+ routes to stderr, INFO/DEBUG to stdout.
-    Idempotency: if logger already has handlers, reuse them (no duplication
-    across repeated calls or tests).
-
-    Args:
-        name: Logger name (default "podcastify").
-
-    Returns:
-        Configured logging.Logger instance.
-    """
-    if name in _logger_cache:
-        return _logger_cache[name]
-
-    logger = logging.getLogger(name)
-
-    if logger.handlers:
-        _logger_cache[name] = logger
-        return logger
-
-    from podcastify.config import Config
-
-    level_str = Config.LOG_LEVEL.upper()
-    valid_levels = {"DEBUG", "INFO", "WARNING", "ERROR"}
-
-    if level_str not in valid_levels:
+def configure_logging(level: Optional[str] = None) -> None:
+    level_str = (level or Config.LOG_LEVEL).upper()
+    if level_str not in VALID_LEVELS:
         level_str = "INFO"
 
+    logger = logging.getLogger(PACKAGE_LOGGER)
+    for handler in logger.handlers[:]:
+        logger.removeHandler(handler)
     logger.setLevel(getattr(logging, level_str))
 
     formatter = logging.Formatter(
@@ -55,17 +34,4 @@ def get_logger(name: str = "podcastify") -> logging.Logger:
     stdout_handler.setFormatter(formatter)
     logger.addHandler(stdout_handler)
 
-    logger.propagate = True
-
-    _logger_cache[name] = logger
-    return logger
-
-
-def reset_logger_cache() -> None:
-    """Reset the logger cache (useful for tests)."""
-    global _logger_cache
-    for logger_name in list(_logger_cache.keys()):
-        logger = logging.getLogger(logger_name)
-        for handler in logger.handlers[:]:
-            logger.removeHandler(handler)
-    _logger_cache.clear()
+    logger.propagate = False

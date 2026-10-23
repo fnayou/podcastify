@@ -1,4 +1,5 @@
 import json
+import logging
 import subprocess
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -6,9 +7,8 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from podcastify.config import Config
-from podcastify.logging_config import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class MediaProcessor:

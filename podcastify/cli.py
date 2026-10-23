@@ -1,11 +1,12 @@
 import argparse
+import logging
 import os
 import tempfile
 from pathlib import Path
 from typing import Any, Dict, Optional, Sequence
 
 from podcastify.config import Config
-from podcastify.logging_config import get_logger
+from podcastify.logging_config import configure_logging
 from podcastify.media import MediaProcessor
 from podcastify.parser import (
     ConfigurationManager,
@@ -14,7 +15,7 @@ from podcastify.parser import (
 )
 from podcastify.rss import RSSGenerator
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class PodcastProcessor:
@@ -129,7 +130,7 @@ class PodcastProcessor:
             return True
 
         except Exception as e:
-            logger.error(f"Failed to process {podcast_name}: {e}")
+            logger.exception(f"Failed to process {podcast_name}: {e}")
             return False
 
     def process_all_podcasts(self) -> int:
@@ -164,6 +165,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     args = build_parser().parse_args(argv)
+    configure_logging()
     logger.info("Starting podcast RSS generator")
     if args.command == "generate" or Config.RUN_ON_START:
         processor = PodcastProcessor(dry_run=getattr(args, "dry_run", False))

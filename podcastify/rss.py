@@ -1,4 +1,5 @@
 import hashlib
+import logging
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -6,16 +7,14 @@ from typing import Any, Dict, List, Optional, Union
 
 from xml.sax.saxutils import escape
 
-from podcastify.config import Config
-from podcastify.logging_config import get_logger
+from podcastify.config import Config, _coerce_bool
 from podcastify.media import MediaProcessor
 from podcastify.parser import (
     EpisodeManager,
-    _coerce_bool,
     rfc2822_date,
 )
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _ILLEGAL_XML_CHARS = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f￾￿]")
 

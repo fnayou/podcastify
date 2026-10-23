@@ -1,4 +1,5 @@
 import email.utils as eut
+import logging
 import re
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -9,25 +10,12 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from podcastify.config import Config
-from podcastify.logging_config import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def rfc2822_date(dt: datetime) -> str:
     return eut.format_datetime(dt.astimezone(timezone.utc))
-
-
-def _coerce_bool(value: Any, default: bool = False) -> bool:
-    if value is None:
-        return default
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, str):
-        return value.strip().lower() in ("true", "yes", "1", "on")
-    return bool(value)
-
-
 
 
 _NAME_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
