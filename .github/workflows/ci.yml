@@ -71,7 +71,6 @@ jobs:
     permissions:
       contents: read
       security-events: write
-      pull-requests: write
 
     steps:
       - name: Checkout
@@ -115,64 +114,30 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Note about forked PRs (no Docker Hub secrets)
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == true
-        run: echo "Skipping Docker Scout on forked PRs (no secrets). Trivy still runs."
-
-      - name: Login to Docker Hub (PR, same-repo only)
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
-        with:
-          registry: docker.io
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Docker Scout (PR)
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false
-        id: docker-scout
-        continue-on-error: true
-        uses: docker/scout-action@a4119c5a8c5076236a54e4ce99531f7e4dd2ef84 # v1.27.0
-        with:
-          command: cves
-          image: local://local/podcastify:${{ github.sha }}
-          only-severities: critical,high
-          only-fixed: true
-          summary: true
-          write-comment: true
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          sarif-file: docker-scout.sarif
-
-      - name: Upload SARIF (Scout, PR)
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false
-        uses: github/codeql-action/upload-sarif@4bfa242aa49c5f7c6770b98670d354a7dfac05f8 # v3.39.1
-        with:
-          sarif_file: docker-scout.sarif
-
-      - name: Trivy scan (PR, non-blocking)
+      - name: Trivy scan (non-blocking)
+        id: trivy
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: "local/podcastify:${{ github.sha }}"
-          format: "table"
+          format: "json"
+          output: "trivy-results.json"
           vuln-type: "os,library"
           severity: "CRITICAL,HIGH"
           ignore-unfixed: true
           exit-code: "0"
           hide-progress: true
 
-      - name: Trivy SARIF (PR)
-        id: sarif-pr
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          image-ref: "local/podcastify:${{ github.sha }}"
-          format: "sarif"
-          output: "trivy-results.sarif"
-          vuln-type: "os,library"
-          severity: "CRITICAL,HIGH,MEDIUM,LOW"
-          ignore-unfixed: true
-          hide-progress: true
+      - name: Trivy report (table and SARIF from the same scan)
+        if: ${{ !cancelled() && hashFiles('trivy-results.json') != '' }}
+        shell: bash
+        run: |
+          trivy convert --format table --output trivy-results.txt trivy-results.json
+          cat trivy-results.txt
+          { echo '```'; cat trivy-results.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          trivy convert --format sarif --output trivy-results.sarif trivy-results.json
 
-      - name: Upload SARIF (Trivy, PR)
-        if: steps.sarif-pr.outcome == 'success'
+      - name: Upload SARIF (Trivy)
+        if: ${{ !cancelled() && hashFiles('trivy-results.sarif') != '' }}
         uses: github/codeql-action/upload-sarif@4bfa242aa49c5f7c6770b98670d354a7dfac05f8 # v3.39.1
         with:
           sarif_file: "trivy-results.sarif"
