@@ -5,6 +5,7 @@ import os
 import time
 from datetime import datetime, timezone
 
+import pytest
 import yaml
 
 from podcastify.cli import PodcastProcessor
@@ -488,4 +489,35 @@ class TestStaleTempFiles:
         self._age(stale, 3600)
         mocker.patch("pathlib.Path.unlink", side_effect=OSError("denied"))
         assert PodcastProcessor().process_all_podcasts() == 0
-        assert any("denied" in r.message and r.levelname == "WARNING" for r in caplog.records)
+        warnings = [r.message for r in caplog.records if r.levelname == "WARNING" and "stale temp" in r.message]
+        assert warnings == [f"Could not remove stale temp file {stale.name}: denied"]
+
+
+class TestEdgeCases:
+    def test_no_model_builds_empty_metadata(self):
+        assert PodcastProcessor()._build_metadata_from_model(None) == {}
+
+    def test_empty_metadata_fails_the_podcast(self, tmp_path, mocker, caplog):
+        cfg = tmp_path / "myshow-podcast.yaml"
+        cfg.write_text(yaml.safe_dump({"title": "T", "description": "D"}), encoding="utf-8")
+        mocker.patch.object(PodcastProcessor, "_build_metadata_from_model", return_value={})
+        assert PodcastProcessor().process_podcast("myshow", cfg) is False
+        errors = [r.message for r in caplog.records if r.levelname == "ERROR"]
+        assert errors == ["Failed to build metadata for myshow"]
+
+    @pytest.mark.parametrize("content", ["- a\n- b\n", "just a string\n", "42\n"])
+    def test_non_mapping_config_fails_validation(self, tmp_path, caplog, content):
+        cfg = tmp_path / "odd-podcast.yaml"
+        cfg.write_text(content, encoding="utf-8")
+        assert PodcastProcessor().process_podcast("odd", cfg) is False
+        errors = [r.message for r in caplog.records if r.levelname == "ERROR"]
+        assert len(errors) == 1
+        assert errors[0].startswith("Config validation failed for odd:")
+
+    def test_bad_base_url_logs_the_value(self, tmp_path, monkeypatch, caplog):
+        monkeypatch.setenv("PUBLIC_BASE_URL", "ftp://example.com")
+        cfg = tmp_path / "myshow-podcast.yaml"
+        cfg.write_text(yaml.safe_dump({"title": "T", "description": "D"}), encoding="utf-8")
+        assert PodcastProcessor().process_podcast("myshow", cfg) is False
+        errors = [r.message for r in caplog.records if r.levelname == "ERROR"]
+        assert errors == ["Invalid PUBLIC_BASE_URL 'ftp://example.com' for myshow: must start with http:// or https://"]
