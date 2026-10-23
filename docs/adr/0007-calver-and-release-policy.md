@@ -98,7 +98,9 @@ missing `v1.1.0` section backfilled (issue #104) and is not edited any more.
 ### Old tags
 
 The tags `v1.0.1`, `v1.1.0`, `v1.1.1` and the stray `1.0.1` are not touched
-until the first CalVer release. What happens to them afterwards is decided then.
+until the first CalVer release is published. Then all of them are deleted (git
+tags, locally and on origin). What happens to their GitHub Releases and Docker
+Hub tags is decided at that moment.
 
 ### Docker Hub description
 

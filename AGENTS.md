@@ -58,7 +58,8 @@ Invariants and gotchas: `docs/architecture-notes.md`. Runtime and container: `do
 
 - Python: 4-space indent, UTF-8, LF. YAML: 2-space indent. See `.editorconfig`.
 - Class-based; PascalCase classes, snake_case functions. Logic lives in `podcastify/`; `app.py` stays thin.
-- No comments unless requested. No unused imports or dead code.
+- Comments only to explain why: a constraint, a trade-off or a non-obvious choice. Never narrate what the code does. A short module docstring is fine for a tool script.
+- No unused imports or dead code.
 - No secrets or credentials in commits.
 - Episode GUID defaults to SHA-1 of `<podcast>/<filename>`; renaming breaks subscriber history.
 - Config files are `podcasts/<name>-podcast.yaml`; media in `public/<name>/`; feeds in `public/<name>.xml`.
