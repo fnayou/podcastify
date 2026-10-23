@@ -26,3 +26,15 @@ jobs:
 
       - name: Run tests
         run: python -m pytest tests/ --cov=podcastify --cov-report=term-missing --cov-fail-under=90 --tb=short -q
+
+      - name: Ruff lint
+        if: ${{ !cancelled() }}
+        run: ruff check --output-format github .
+
+      - name: Ruff format
+        if: ${{ !cancelled() }}
+        run: ruff format --check .
+
+      - name: Hadolint
+        if: ${{ !cancelled() }}
+        run: docker run --rm -i hadolint/hadolint:v2.15.1@sha256:32dac94127fd60b7b7e3fbfc65e1383b9b5e25c9bfd7b8536de7a539fe68a12d < docker/podcastify/Dockerfile
