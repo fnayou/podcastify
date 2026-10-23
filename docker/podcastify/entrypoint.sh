@@ -47,6 +47,11 @@ else
   RUNAS=""
 fi
 
+if [ "${1:-}" = "generate" ]; then
+  shift
+  exec $RUNAS python /app/app.py generate "$@"
+fi
+
 run_on_start="$(printf '%s' "${RUN_ON_START:-true}" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
 case "$run_on_start" in
   true|yes|1|on) run_on_start=true ;;
