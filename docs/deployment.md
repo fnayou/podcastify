@@ -93,7 +93,7 @@ The podcastify generator logs at different levels. The visibility depends on how
 For production behind a reverse proxy at `https://podcasts.domain.tld`:
 
 1. Set `PUBLIC_BASE_URL=https://podcasts.domain.tld` in `.env`
-2. Forward to the container's `${SERVICE_PORT}` (default 8080)
+2. Forward to the published host port `HOST_PORT` (default 8080) on `localhost`. A proxy running as a container on the same Docker network forwards to `podcastify:${SERVICE_PORT}` instead.
 3. Publish the port on the loopback interface only, so the plain-HTTP port is not reachable from the LAN or internet around the proxy:
 
 ```yaml
@@ -105,6 +105,7 @@ For production behind a reverse proxy at `https://podcasts.domain.tld`:
 
 ```
 podcasts.domain.tld {
+  # use your HOST_PORT (default 8080)
   reverse_proxy localhost:8080
 }
 ```
@@ -117,6 +118,7 @@ server {
   server_name podcasts.domain.tld;
 
   location / {
+    # use your HOST_PORT (default 8080)
     proxy_pass http://localhost:8080;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
