@@ -31,12 +31,42 @@ jobs:
             exit 1
           fi
 
-  test:
+  notes-check:
     needs: [validate-tag]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout (full history for the notes)
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+
+      - name: Notes range
+        id: range
+        shell: bash
+        run: echo "args=$(sh tasks/release_range.sh "${GITHUB_REF_NAME}" f1e964de)" >> "$GITHUB_OUTPUT"
+
+      - name: Generate release notes
+        uses: orhun/git-cliff-action@a9a95522b26fe6403f7bb24031f21fb573d0f5ff # v4.9.1
+        with:
+          version: v2.14.2
+          config: cliff.toml
+          args: --output release-notes.md ${{ steps.range.outputs.args }}
+
+      - name: Check the notes are not empty
+        shell: bash
+        run: |
+          if ! grep -q '[^[:space:]]' release-notes.md; then
+            echo "::error::git-cliff produced no release notes for ${GITHUB_REF_NAME}. Check that the range holds feat, fix, perf, build or revert commits, or breaking changes."
+            exit 1
+          fi
+
+  test:
+    needs: [notes-check]
     uses: ./.github/workflows/test.yml
 
   docker:
-    needs: [test]
+    needs: [test, notes-check]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
@@ -172,35 +202,14 @@ jobs:
       - name: Notes range
         id: range
         shell: bash
-        env:
-          TAG: ${{ github.ref_name }}
-          FIRST_COMMIT: f1e964de
-        run: |
-          if [[ "${TAG}" == *-* ]]; then
-            PATTERN='^v20[0-9]{2}\.[0-9]+\.[0-9]+(-.*)?$'
-          else
-            PATTERN='^v20[0-9]{2}\.[0-9]+\.[0-9]+$'
-          fi
-          PREV="$(git log --simplify-by-decoration --format=%D "${TAG}^" | tr ',' '\n' | sed -n 's/^ *tag: //p' | grep -E "${PATTERN}" | head -n 1 || true)"
-          START="${PREV:-${FIRST_COMMIT}}"
-          SELF="$(printf '%s' "${TAG}" | sed 's/\./\\./g')"
-          echo "Notes range: ${START}..${TAG}"
-          echo "args=--output release-notes.md --tag-pattern '^${SELF}\$' ${START}..${TAG}" >> "$GITHUB_OUTPUT"
+        run: echo "args=$(sh tasks/release_range.sh "${GITHUB_REF_NAME}" f1e964de)" >> "$GITHUB_OUTPUT"
 
       - name: Generate release notes
         uses: orhun/git-cliff-action@a9a95522b26fe6403f7bb24031f21fb573d0f5ff # v4.9.1
         with:
           version: v2.14.2
           config: cliff.toml
-          args: ${{ steps.range.outputs.args }}
-
-      - name: Check the notes are not empty
-        shell: bash
-        run: |
-          if ! grep -q '[^[:space:]]' release-notes.md; then
-            echo "::error::git-cliff produced no release notes for ${GITHUB_REF_NAME}. Check that the range holds feat, fix, perf, build or revert commits, or breaking changes."
-            exit 1
-          fi
+          args: --output release-notes.md ${{ steps.range.outputs.args }}
 
       - name: Compose the release body
         shell: bash
