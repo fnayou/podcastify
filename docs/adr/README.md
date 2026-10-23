@@ -7,6 +7,7 @@
 | [0003](0003-duration-cache-location.md) | Duration cache location and lifecycle | Accepted, implemented |
 | [0004](0004-path-env-vars-are-internal.md) | Container path variables are image defaults, not settings | Accepted |
 | [0005](0005-puid-pgid-runtime.md) | PUID/PGID drop with su-exec; pinned `user:` as hardened mode | Accepted |
+| [0006](0006-tinytag-for-durations.md) | tinytag for episode durations, ffmpeg removed | Accepted |
 
 ## Writing an ADR
 

@@ -4,12 +4,12 @@
 
 ### Rationale
 
-The base image `python:3.12-alpine3.22` pins the Alpine and Python versions. Caddy does not come from Alpine's package repository: the Dockerfile copies the Caddy binary from the official `caddy` image, whose tag is pinned in the first line of the Dockerfile, because the Alpine `caddy` package lags upstream. The Alpine packages `ffmpeg`, `tini`, `su-exec` and `ca-certificates` are installed without version pins, after `apk upgrade --no-cache` has patched the base packages. Pinning those packages to patch revisions breaks as Alpine moves to newer revisions, so the maintenance burden outweighs the benefit.
+The base image `python:3.12-alpine3.22` pins the Alpine and Python versions. Caddy does not come from Alpine's package repository: the Dockerfile copies the Caddy binary from the official `caddy` image, whose tag is pinned in the first line of the Dockerfile, because the Alpine `caddy` package lags upstream. The Alpine packages `tini`, `su-exec` and `ca-certificates` are installed without version pins, after `apk upgrade --no-cache` has patched the base packages. Pinning those packages to patch revisions breaks as Alpine moves to newer revisions, so the maintenance burden outweighs the benefit.
 
 ### Decision
 
 - **Caddy**: pinned by the tag of the official `caddy` image in the Dockerfile.
-- **ffmpeg, tini, su-exec, ca-certificates**: Not pinned to specific patch revisions; `apk upgrade` runs at build time.
+- **tini, su-exec, ca-certificates**: Not pinned to specific patch revisions; `apk upgrade` runs at build time.
 - **Rationale**: The base image `python:3.12-alpine3.22` provides sufficient reproducibility for development and deployment. In production, users should run specific image digests (via `docker pull image@sha256:...`) rather than tags to ensure exact reproducibility.
 - **Alternative**: If reproducibility across releases becomes critical, maintain a separate `alpine.versions.lock` file and use a more sophisticated build process (e.g., a shell script to query apk repos and pin available versions).
 
@@ -36,7 +36,7 @@ exec $RUNAS caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
 `tini` forwards signals, so `docker stop` ends the container promptly both
 during the boot generation and once Caddy serves. Without it, the shell would be
 PID 1 during generation, ignore SIGTERM, and be killed after the stop timeout.
-ffprobe children are reaped by `subprocess.run` itself.
+The generator starts no child processes of its own: durations are read in-process.
 
 `RUN_ON_START` is read case-insensitively by the entrypoint, with the same
 values as the generator: `true/yes/1/on` run the generator at boot.

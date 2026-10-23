@@ -45,14 +45,21 @@ not covered there. Read both before proposing changes to `podcastify/`.
   persisted to `<CACHE_ROOT>/.podcastify-cache.json` (`MediaProcessor`,
   media.py; ADR 0003). A new mtime invalidates the entry. On save, only the
   newest mtime per path is written, entries for files that no longer exist are
-  dropped, and the write goes through a `.tmp` file and `replace`. On first
-  load, a cache found at `<PUBLIC_ROOT>/.podcastify-cache.json` is copied to
-  `CACHE_ROOT` and removed when no new cache exists yet. An ffprobe timeout is
-  cached in memory only (`_unpersisted`), so the next run probes the file
-  again; other failures are persisted.
+  dropped, and the write goes through a `.tmp` file and `replace`. The file is
+  `{"version": N, "durations": {...}}`; `MediaProcessor.CACHE_VERSION` is
+  bumped whenever the way durations are read changes, and a file in any other
+  version (including the flat pre-version format) is ignored, so every file is
+  read again once (ADR 0006). On first load, a cache found at
+  `<PUBLIC_ROOT>/.podcastify-cache.json` is copied to `CACHE_ROOT` and removed
+  when no new cache exists yet. Failures (`None`) are persisted too.
+- **Duration guard**: `MediaProcessor.get_duration_seconds` returns `None` for a
+  `tinytag` exception, a missing duration, a non-finite or non-positive value,
+  and a value under 1 s on a file of at least 100 KB (a random file can parse as
+  one short MPEG frame). Known limit: a truncated MP3 with a Xing header reports
+  its full original length (ADR 0006).
 - **Duration fallback chain**: episode `duration_hms` (from YAML) →
-  `MediaProcessor.get_duration_seconds` via `ffprobe` → omitted entirely if
-  ffprobe fails (rss.py).
+  `MediaProcessor.get_duration_seconds` via `tinytag` → omitted entirely if
+  the read fails (rss.py).
 - **GUID default**: SHA-1 of `<podcast_name>/<filename>`,
   `isPermaLink="false"` (rss.py). Renaming a podcast or episode file
   changes the GUID and breaks subscriber dedup/listen history.
@@ -69,7 +76,7 @@ not covered there. Read both before proposing changes to `podcastify/`.
 - **Pipeline**: `PodcastProcessor.process_podcast` (cli.py) — check that
   `PUBLIC_BASE_URL` starts with `http://` or `https://` → load YAML → pydantic
   validate → require `public/<name>/` to exist → discover episodes → skip
-  episodes whose file is missing (warning) → warm duration cache in parallel →
+  episodes whose file is missing (warning) → warm duration cache (`warm_durations`, one cache save) →
   sort → generate XML → atomic write (or skip write if `PUBLISH_XML=false` or
   `--dry-run`, or if the XML matches the file on disk once `<lastBuildDate>`
   is ignored). No episode left means the podcast fails.

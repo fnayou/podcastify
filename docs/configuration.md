@@ -111,7 +111,7 @@ episodes:
 | `episode` | integer | No | Episode number within season. |
 | `episode_type` | string | No | `full`, `trailer`, or `bonus`. |
 | `guid` | string | No | Unique identifier. Defaults to SHA-1 of `<podcast>/<filename>`. Must be unique within the podcast; a duplicate rejects the whole config. |
-| `duration_hms` | string | No | Pre-set duration as `H:MM:SS` or `M:SS`. If omitted, extracted via `ffprobe`. |
+| `duration_hms` | string | No | Pre-set duration as `H:MM:SS` or `M:SS`. If omitted, read from the media file with `tinytag`. |
 
 ## File Placement
 

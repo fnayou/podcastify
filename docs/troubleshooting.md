@@ -72,16 +72,17 @@ cp /path/to/*.mp3 public/myshow/
 
 **Fix:** Copy the image into `public/<name>/`, or use a full `https://` URL.
 
-### ffprobe duration extraction fails
+### Duration extraction fails
 
-**Symptom:** `WARNING podcastify.media: Failed to get duration for ep01.mp3: <reason>`, or once per run `ffprobe not found; publishing feeds without episode durations`.
+**Symptom:** `WARNING podcastify.media: Failed to get duration for ep01.mp3: <reason>`. It is logged once per file; the result is cached, so the file is not read again until it changes.
 
-**Cause:** `ffprobe` is not available inside the container, or the MP3 is corrupted.
+**Cause:** `tinytag` could not read the file (corrupted or truncated file, a format it does not recognise, a zero-byte file), or the result was not usable: not finite, zero or negative, or under 1 s for a file of at least 100 KB (typical for a file that is not audio).
 
 **Fix:**
-- The container image includes `ffprobe`. If building locally, ensure ffmpeg is installed.
+- Check that the file plays and has the right extension.
 - If extraction fails, the episode will still generate but without `<itunes:duration>`.
 - You can manually set `duration_hms` in the episode config as a workaround.
+- A truncated MP3 that still carries a Xing header reports its original full length. Re-encode or re-download the file, or set `duration_hms`.
 
 ### "Could not chown ...; continuing"
 
@@ -151,7 +152,7 @@ task docker:shell
 
 ### Enable Debug Logging
 
-To increase verbosity and see detailed trace information (config discovery, episode probing, cache operations, ffprobe invocations):
+To increase verbosity and see detailed trace information (config discovery, episode probing, cache operations, duration reads):
 
 ```bash
 # At boot
