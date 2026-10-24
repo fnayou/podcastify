@@ -16,6 +16,8 @@ includes:
     taskfile: ./tasks/podcastify.yml
   dev:
     taskfile: ./tasks/dev.yml
+  docs:
+    taskfile: ./tasks/docs.yml
   worktree:
     taskfile: ./tasks/worktree.yml
   ci:
