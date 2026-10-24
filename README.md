@@ -1,3 +1,5 @@
+![podcastify: tiny self-hosted podcast RSS generator](https://raw.githubusercontent.com/fnayou/podcastify/main/website/assets/images/podcastify-readme-banner.svg)
+
 # Podcastify — tiny self-hosted podcast RSS generator
 
 [![Docker Pulls](https://img.shields.io/docker/pulls/fnayou/podcastify)](https://hub.docker.com/r/fnayou/podcastify)
