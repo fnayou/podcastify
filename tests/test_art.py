@@ -3,6 +3,7 @@
 
 import re
 import shutil
+import subprocess
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -46,8 +47,11 @@ def _cli(root):
     return ArtCli(root, out=lines.append, err=errors.append), lines, errors
 
 
+COMMITTED = [o for o in ArtCli.OUTPUTS if o.committed]
+
+
 class TestCommittedImages:
-    @pytest.mark.parametrize("output", ArtCli.OUTPUTS, ids=lambda o: o.name)
+    @pytest.mark.parametrize("output", COMMITTED, ids=lambda o: o.name)
     def test_committed_svg_is_current(self, output, facts):
         path = ROOT / IMAGES / f"{output.base}.svg"
         assert path.is_file(), f"{path} is missing; run `task art:build`"
@@ -66,8 +70,9 @@ class TestCommittedImages:
     def test_svg_is_well_formed_with_the_expected_view_box(self, output, facts):
         root = ET.fromstring(output.make(facts))
         assert root.tag == f"{SVG_NS}svg"
-        assert root.get("viewBox") == VIEW_BOXES[output.base]
-        assert root.get("width") and root.get("height")
+        width, height = root.get("width"), root.get("height")
+        assert width and height
+        assert root.get("viewBox") == VIEW_BOXES.get(output.base, f"0 0 {width} {height}")
 
     @pytest.mark.parametrize("output", ArtCli.OUTPUTS, ids=lambda o: o.name)
     def test_output_is_deterministic(self, output, facts):
@@ -76,7 +81,8 @@ class TestCommittedImages:
     @pytest.mark.parametrize("output", ArtCli.OUTPUTS, ids=lambda o: o.name)
     def test_output_uses_no_external_resource_and_no_build_identity(self, output, facts):
         markup = output.make(facts)
-        assert re.findall(r'https?://[^"\']+', markup) == ["http://www.w3.org/2000/svg"]
+        assert re.findall(r'\b(?:href|src|xlink:href)="[^"]*"', markup) == []
+        assert re.findall(r'xmlns(?::\w+)?="[^"]*"', markup) == ['xmlns="http://www.w3.org/2000/svg"']
         assert "url(http" not in markup and "@import" not in markup
         assert not re.search(r"\b[0-9a-f]{40}\b", markup)
         assert not re.search(r"\b20\d\d-\d\d-\d\d\b", markup)
@@ -322,6 +328,93 @@ class TestRemind:
             ["git", "diff", "--name-only", "a...b"],
             ["git", "diff", "--name-only", "a...b"],
         ]
+
+
+def _architecture(facts) -> str:
+    return next(o for o in ArtCli.OUTPUTS if o.name == "architecture").make(facts)
+
+
+class TestArchitecture:
+    def test_mentions_every_module_of_the_package(self, facts):
+        svg = _architecture(facts)
+        for path in (ROOT / "podcastify").glob("*.py"):
+            if path.name != "__init__.py":
+                assert f"{path.stem}.py" in svg, path.name
+
+    def test_shows_the_pipeline_the_container_and_the_settings(self, facts):
+        svg = _architecture(facts)
+        for expected in (
+            "sources",
+            "feeds",
+            "caddy",
+            "tini",
+            "entrypoint.sh",
+            ":8080",
+            facts.base_image,
+            facts.caddy_image,
+        ):
+            assert expected in svg, expected
+        for key, _ in facts.settings:
+            assert key in svg, key
+        for media_type in facts.media_types:
+            assert media_type in svg
+
+    def test_shows_the_roles_from_the_architecture_table(self, facts):
+        svg = _architecture(facts)
+        assert "iTunes RSS XML" in svg and "tinytag duration," in svg
+
+    def test_is_well_formed_and_taller_than_wide_enough_to_hold_three_bands(self, facts):
+        root = ET.fromstring(_architecture(facts))
+        assert root.get("width") == "1920" and int(root.get("height")) > 900
+
+    def test_a_new_module_shows_up_without_a_code_change(self, repo):
+        (repo / "podcastify/zeta.py").write_text('"""Zeta things."""\n\nclass Zeta:\n    pass\n', encoding="utf-8")
+        svg = _architecture(FactsReader(repo).read())
+        assert "zeta.py" in svg and "Zeta things." in svg
+
+    def test_without_support_modules_the_support_row_is_absent(self, facts):
+        chain_only = tuple(m for m in facts.modules if m.name in ("parser", "media", "rss", "cli"))
+        svg = _architecture(_with(facts, modules=chain_only))
+        assert "SUPPORT" not in svg and "config.py" not in svg
+
+    def test_a_missing_stage_module_is_left_out(self, facts):
+        without_media = tuple(m for m in facts.modules if m.name != "media")
+        svg = _architecture(_with(facts, modules=without_media))
+        assert "media.py" not in svg and "parser.py" in svg
+
+    def test_is_git_ignored(self):
+        lines = (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
+        assert "website/assets/images/podcastify-architecture.svg" in lines
+
+    def test_is_not_committed_and_not_checked(self, repo):
+        assert _tracked("podcastify-architecture.svg") is False
+        cli, _, errors = _cli(repo)
+        cli.run(["build", "--only", "architecture", "--no-png"])
+        assert cli.check() == 1
+        assert all("architecture" not in e for e in errors)
+
+    def test_never_gets_a_png(self, repo, monkeypatch):
+        fake = repo / "bin"
+        fake.mkdir()
+        exe = fake / "rsvg-convert"
+        exe.write_text('#!/bin/sh\necho png > "$5"\n', encoding="utf-8")
+        exe.chmod(0o755)
+        monkeypatch.setenv("PATH", str(fake))
+        cli, lines, _ = _cli(repo)
+        cli.run(["build", "--only", "architecture,logo"])
+        assert (repo / IMAGES / "podcastify-logo.png").exists()
+        assert not (repo / IMAGES / "podcastify-architecture.png").exists()
+        assert lines == ["wrote podcastify-architecture.svg", "wrote podcastify-logo.svg + podcastify-logo.png"]
+
+
+def _tracked(name: str) -> bool:
+    try:
+        result = subprocess.run(
+            ["git", "ls-files", "--error-unmatch", f"{IMAGES}/{name}"], cwd=ROOT, capture_output=True, text=True
+        )
+    except FileNotFoundError:
+        pytest.skip("git is not installed")
+    return result.returncode == 0
 
 
 class TestWiring:
