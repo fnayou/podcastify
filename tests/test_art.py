@@ -198,7 +198,7 @@ class TestBuild:
 
     def test_build_output_equals_the_committed_files(self, repo):
         _cli(repo)[0].run(["build", "--no-png"])
-        for output in ArtCli.OUTPUTS:
+        for output in COMMITTED:
             built = (repo / IMAGES / f"{output.base}.svg").read_text(encoding="utf-8")
             assert built == (ROOT / IMAGES / f"{output.base}.svg").read_text(encoding="utf-8")
 
