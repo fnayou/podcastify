@@ -98,3 +98,7 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=120s CMD ["/bin/sh", "-c"
 ```
 
 This verifies that Caddy is responding on the configured port.
+
+## Index page at `/`
+
+The Caddyfile needs no rule for the index. `file_server` serves `index.html` for `/` when `/app/public/index.html` exists, and answers 404 when it does not, because directory browsing is off and `hide .*` keeps the generator's dotfile temp files unreachable. The generator writes the file only with `PUBLISH_INDEX=true`; see [Index Page](deployment.md#index-page). The smoke test checks both states on the built image.

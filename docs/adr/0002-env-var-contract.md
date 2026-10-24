@@ -9,7 +9,7 @@ Accepted
 The variable controlling the in-container Caddy listen port was renamed from
 `PORT` to `SERVICE_PORT` in the v1.0.1 runtime simplification, and `HOST_PORT`
 was introduced for the host-side mapping. The generator itself only ever reads
-`PUBLIC_BASE_URL`, `RUN_ON_START`, `PUBLISH_XML` and `LOG_LEVEL`, plus the
+`PUBLIC_BASE_URL`, `RUN_ON_START`, `PUBLISH_XML`, `PUBLISH_INDEX` and `LOG_LEVEL`, plus the
 internal path defaults of ADR 0004 (`podcastify/config.py`); it does not read
 any port variable. Caddy binds `{$SERVICE_PORT}` (the site address in `docker/podcastify/Caddyfile`).
 
@@ -31,6 +31,7 @@ The canonical environment contract is:
 | `RUN_ON_START` | generator, entrypoint | `true` | Run generator once at boot |
 | `GENERATE_INTERVAL` | entrypoint | `0` | Seconds between change checks of configs and media; `0` = off |
 | `PUBLISH_XML` | generator | `true` | Write `<name>.xml` (false = dry run) |
+| `PUBLISH_INDEX` | generator | `false` | Write `index.html` listing the feeds; only effective while `PUBLISH_XML` is on |
 | `LOG_LEVEL` | generator | `INFO` | `DEBUG`, `INFO`, `WARNING` or `ERROR` |
 
 `PODCASTS_ROOT`, `PUBLIC_ROOT` and `CACHE_ROOT` are not part of the contract:
@@ -46,7 +47,7 @@ migration note.
 - `Config.BASE_URL` reads `PUBLIC_BASE_URL`, not `BASE_URL`; KB/glossary must
   not call the env var "BASE_URL" (the *attribute* is `BASE_URL`, the *env key*
   is `PUBLIC_BASE_URL`).
-- Boolean env vars (`PUBLISH_XML`, `RUN_ON_START`) and YAML booleans share one
+- Boolean env vars (`PUBLISH_XML`, `PUBLISH_INDEX`, `RUN_ON_START`) and YAML booleans share one
   parser, `_coerce_bool` (`podcastify/config.py`): `true/yes/1/on` and
   `false/no/0/off`, case-insensitive. Any other string is read as false and
   logged as a warning. This replaces the earlier "only `true`" env rule. The

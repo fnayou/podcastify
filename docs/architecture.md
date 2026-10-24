@@ -12,9 +12,10 @@ Podcastify is a Python **package** (`podcastify/`) + thin `app.py` entry point. 
 | `podcastify/media.py` | `MediaProcessor` | tinytag duration extraction, persistent cache, iTunes formatting. |
 | `podcastify/parser.py` | `ConfigurationManager`, `EpisodeManager`, pydantic models | YAML load + validate, metadata extraction, episode/image discovery. |
 | `podcastify/rss.py` | `RSSGenerator` | iTunes-compatible XML feed generation. |
-| `podcastify/cli.py` | `PodcastProcessor`, `FeedWatcher`, `main` | Orchestration: load → validate → discover → generate → atomic write when the content changed; optional polling watcher that regenerates on config or media changes. |
+| `podcastify/index.py` | `IndexPage`, `IndexEntry` | Opt-in `index.html` listing the feeds: escaped semantic HTML, generator marker, marker-protected removal. |
+| `podcastify/cli.py` | `PodcastProcessor`, `FeedWatcher`, `main` | Orchestration: load → validate → discover → generate → atomic write when the content changed; the index page after the feeds of a run; optional polling watcher that regenerates on config or media changes. |
 
-Note: 7 logical classes (`Config`, `MediaProcessor`, `ConfigurationManager`, `EpisodeManager`, `RSSGenerator`, `PodcastProcessor`, `FeedWatcher`) in 5 modules; `ConfigurationManager` + `EpisodeManager` (+ pydantic models + helpers) share `parser.py`, and `PodcastProcessor` + `FeedWatcher` share `cli.py`.
+Note: 8 logical classes (`Config`, `MediaProcessor`, `ConfigurationManager`, `EpisodeManager`, `RSSGenerator`, `IndexPage`, `PodcastProcessor`, `FeedWatcher`) in 6 modules; `ConfigurationManager` + `EpisodeManager` (+ pydantic models + helpers) share `parser.py`, and `PodcastProcessor` + `FeedWatcher` share `cli.py`.
 
 ## Data Flow
 
@@ -37,6 +38,13 @@ Note: 7 logical classes (`Config`, `MediaProcessor`, `ConfigurationManager`, `Ep
               └──────┬───────┘
                      ▼
               public/<name>.xml
+                     │  (PUBLISH_INDEX=true, feeds not `listed: false`)
+                     ▼
+              ┌──────────────┐
+              │  IndexPage   │
+              └──────┬───────┘
+                     ▼
+              public/index.html
 ```
 
 ## Key Behaviors
