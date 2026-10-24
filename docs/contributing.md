@@ -50,6 +50,10 @@ task docker:logs
 
 Duration tests read the small files in `tests/fixtures/audio/` (1 s each). To rebuild them, run `tests/fixtures/make_audio.sh`; it needs Docker and runs ffmpeg in a throwaway container. CI does not run it, and the image has no ffmpeg. See [ADR 0006](adr/0006-tinytag-for-durations.md).
 
+### Documentation site and generated art
+
+A public documentation site (`website/`, built with Zensical and published on GitHub Pages) and generated brand art (`tools/art/`) are planned; `docs/` stays internal and is not published. The decisions are recorded in [ADR 0008](adr/0008-docs-site-art-and-index-page.md). The pieces are not built yet: the configuration reference generator (#116), the site content (#117), the build and deployment (#118) and the art (#119). This section will describe their commands when they exist.
+
 ### Add a new podcast for testing
 
 ```bash
