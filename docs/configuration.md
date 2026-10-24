@@ -39,6 +39,7 @@ categories:
 | `block` | boolean | No | If `true`, prevents the podcast from appearing in iTunes. |
 | `complete` | boolean | No | If `true`, marks the podcast as complete (no new episodes). |
 | `new_feed_url` | string | No | Redirect URL for subscribers if the feed moves. |
+| `listed` | boolean | No | Whether the feed appears on the index page (`PUBLISH_INDEX=true`). Defaults to `true`. `false` hides it from the page only; the feed URL stays reachable. |
 
 A key that is not listed here or under [Episode Fields](#episode-fields) is ignored, and a warning names it, for example `Unknown config key 'episodes[2].pubdate' ignored; check its spelling`. The config is still published.
 
