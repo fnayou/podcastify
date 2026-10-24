@@ -52,7 +52,22 @@ Duration tests read the small files in `tests/fixtures/audio/` (1 s each). To re
 
 ### Documentation site and generated art
 
-A public documentation site (`website/`, built with Zensical and published on GitHub Pages) and generated brand art (`tools/art/`) are planned; `docs/` stays internal and is not published. The decisions are recorded in [ADR 0008](adr/0008-docs-site-art-and-index-page.md). The pieces are not built yet: the configuration reference generator (#116), the site content (#117), the build and deployment (#118) and the art (#119). This section will describe their commands when they exist.
+A public documentation site (`website/`, built with Zensical and published on GitHub Pages) and generated brand art (`tools/art/`) are planned; `docs/` stays internal and is not published. The decisions are recorded in [ADR 0008](adr/0008-docs-site-art-and-index-page.md). The pieces are not built yet: the site content (#117), the build and deployment (#118) and the art (#119). This section will describe their commands when they exist.
+
+### Configuration reference
+
+The field tables in [Configuration](configuration.md#fields) are generated from the pydantic models in `podcastify/parser.py`, so they cannot drift from the code. Every model field carries a `Field(description=...)`; a test fails when one is missing. The text between `<!-- BEGIN GENERATED: fields -->` and `<!-- END GENERATED -->` is rewritten by `tools/config_reference.py`; the prose, examples and behaviour notes around it are hand-written.
+
+After you add or change a field or its description, refresh the page and commit it with the model change:
+
+```bash
+task docs:reference            # rewrite the region
+task docs:reference CHECK=1    # change nothing; exit 1 with a diff when the region is stale
+```
+
+The freshness test (`tests/test_config_reference.py`) regenerates the region in memory and fails when the committed page differs. The tool needs the project requirements, so it uses `.venv` when `task dev:setup` created it. A legacy key shown as deprecated is listed in `ConfigReference.DEPRECATED`, because the models cannot express that.
+
+The tool takes the page path from `--page` (default `docs/configuration.md`). The page will move to `website/` with the public site (#117); only the default changes then.
 
 ### Add a new podcast for testing
 
