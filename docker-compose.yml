@@ -15,6 +15,7 @@ services:
       - RUN_ON_START
       - GENERATE_INTERVAL
       - PUBLISH_XML
+      - PUBLISH_INDEX
       - LOG_LEVEL
       # Set to the uid/gid that owns the bind-mounts below so generated
       # files aren't written as root. Defaults to 1000.
