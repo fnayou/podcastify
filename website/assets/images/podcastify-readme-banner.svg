@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="400" viewBox="0 0 1280 400" role="img" aria-labelledby="t d"><title id="t">podcastify</title><desc id="d">podcastify: Tiny self-hosted podcast RSS generator: private feeds from your own audio files.</desc><defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1e2030"/><stop offset="1" stop-color="#181926"/></linearGradient></defs>
+<g font-family="ui-monospace,'SF Mono',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace">
+<rect width="1280" height="400" fill="url(#bg)"/>
+<rect x="24" y="24" width="1232" height="352" rx="28" fill="#24273a" stroke="#494d64" stroke-width="2"/>
+<g transform="translate(64,64) scale(0.5)"><rect x="16" y="16" width="480" height="480" rx="112" fill="#1e2030" stroke="#494d64" stroke-width="8"/>
+<circle cx="150" cy="362" r="32" fill="#8aadf4"/>
+<path d="M150,262 A100,100 0 0 1 250,362" fill="none" stroke="#8aadf4" stroke-width="36" stroke-linecap="round"/>
+<path d="M150,182 A180,180 0 0 1 330,362" fill="none" stroke="#8aadf4" stroke-width="36" stroke-linecap="round"/>
+<rect x="330" y="155" width="20" height="90" rx="10" fill="#a5adcb"/>
+<rect x="368" y="115" width="20" height="170" rx="10" fill="#a5adcb"/>
+<rect x="406" y="135" width="20" height="130" rx="10" fill="#a5adcb"/>
+<rect x="444" y="170" width="20" height="60" rx="10" fill="#a5adcb"/></g>
+<text x="372" y="168" font-size="96" font-weight="700" fill="#cad3f5" text-anchor="start">podcast</text>
+<text x="775.2" y="168" font-size="96" font-weight="700" fill="#8aadf4" text-anchor="start">ify</text>
+<text x="372" y="226" font-size="28" font-weight="400" fill="#a5adcb" text-anchor="start">Tiny self-hosted podcast RSS generator</text>
+<text x="372" y="266" font-size="28" font-weight="400" fill="#a5adcb" text-anchor="start">Private feeds from your own audio files.</text>
+<rect x="372" y="292" width="84" height="40" rx="20" fill="#24273a" stroke="#494d64" stroke-width="1.5"/>
+<text x="390" y="315" font-size="20" font-weight="400" fill="#b8c0e0" text-anchor="start">.m4a</text>
+<rect x="468" y="292" width="84" height="40" rx="20" fill="#24273a" stroke="#494d64" stroke-width="1.5"/>
+<text x="486" y="315" font-size="20" font-weight="400" fill="#b8c0e0" text-anchor="start">.mp3</text>
+<rect x="564" y="292" width="84" height="40" rx="20" fill="#24273a" stroke="#494d64" stroke-width="1.5"/>
+<text x="582" y="315" font-size="20" font-weight="400" fill="#b8c0e0" text-anchor="start">.mp4</text>
+<rect x="660" y="292" width="84" height="40" rx="20" fill="#24273a" stroke="#494d64" stroke-width="1.5"/>
+<text x="678" y="315" font-size="20" font-weight="400" fill="#b8c0e0" text-anchor="start">.ogg</text>
+<rect x="756" y="292" width="96" height="40" rx="20" fill="#24273a" stroke="#494d64" stroke-width="1.5"/>
+<text x="774" y="315" font-size="20" font-weight="400" fill="#b8c0e0" text-anchor="start">.opus</text>
+</g>
+</svg>
