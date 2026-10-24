@@ -94,6 +94,21 @@ class TestEnvBooleans:
         monkeypatch.delenv(name)
         assert getattr(Config, name) is True
 
+    @pytest.mark.parametrize("value", ["true", "TRUE", "1", "yes", "on"])
+    def test_publish_index_truthy(self, monkeypatch, value):
+        monkeypatch.setenv("PUBLISH_INDEX", value)
+        assert Config.PUBLISH_INDEX is True
+
+    @pytest.mark.parametrize("value", ["false", "0", "no", "off", ""])
+    def test_publish_index_falsy(self, monkeypatch, value):
+        monkeypatch.setenv("PUBLISH_INDEX", value)
+        assert Config.PUBLISH_INDEX is False
+
+    def test_publish_index_unknown_value_warns_and_is_false(self, monkeypatch, caplog):
+        monkeypatch.setenv("PUBLISH_INDEX", "banana")
+        assert Config.PUBLISH_INDEX is False
+        assert any("banana" in r.message and r.levelname == "WARNING" for r in caplog.records)
+
 
 class TestIsValidName:
     @pytest.mark.parametrize("name", ["myshow", "My_Show-2", "show.v2", "a", "9lives"])

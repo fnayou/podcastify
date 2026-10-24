@@ -45,6 +45,7 @@ class Config:
     CACHE_ROOT = _EnvVar("CACHE_ROOT", "/app/.cache", lambda v: Path(v))
     BASE_URL = _EnvVar("PUBLIC_BASE_URL", "http://localhost:8080", lambda v: v.strip().rstrip("/"))
     PUBLISH_XML = _EnvVar("PUBLISH_XML", "true", _coerce_bool)
+    PUBLISH_INDEX = _EnvVar("PUBLISH_INDEX", "false", _coerce_bool)
     RUN_ON_START = _EnvVar("RUN_ON_START", "true", _coerce_bool)
     LOG_LEVEL = _EnvVar("LOG_LEVEL", "INFO")
 

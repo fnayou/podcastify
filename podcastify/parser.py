@@ -94,6 +94,10 @@ class PodcastChannelModel(BaseModel):
     block: Optional[bool] = None
     complete: Optional[bool] = None
     new_feed_url: Optional[str] = None
+    listed: bool = Field(
+        True,
+        description="List this feed on the generated index page; false hides it from the page only, not from its URL",
+    )
     episodes: Optional[List[EpisodeModel]] = None
 
     @model_validator(mode="after")

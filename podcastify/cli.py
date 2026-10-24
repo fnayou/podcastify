@@ -4,10 +4,13 @@ import os
 import re
 import tempfile
 import time
+from datetime import datetime
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import List, Optional, Sequence, Tuple
 
 from podcastify.config import Config
+from podcastify.index import IndexEntry, IndexPage
 from podcastify.logging_config import configure_logging
 from podcastify.media import MediaProcessor
 from podcastify.parser import (
@@ -24,21 +27,52 @@ logger = logging.getLogger(__name__)
 class PodcastProcessor:
     TEMP_SUFFIX = ".xml.tmp"
     STALE_TEMP_AGE_SECONDS = 600
-    BUILD_DATE = re.compile(r"<lastBuildDate>[^<]*</lastBuildDate>")
+    BUILD_DATE = re.compile(r"<lastBuildDate>([^<]*)</lastBuildDate>")
 
     def __init__(self, dry_run: bool = False):
         self.dry_run = dry_run
         self.config_manager = ConfigurationManager()
         self.episode_manager = EpisodeManager()
         self.rss_generator = RSSGenerator()
+        self.index_page = IndexPage()
+        self.index_entries: List[IndexEntry] = []
 
     @classmethod
-    def _unchanged(cls, out: Path, xml: str) -> bool:
+    def _unchanged(cls, out: Path, content: str) -> bool:
         try:
             current = out.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
             return False
-        return cls.BUILD_DATE.sub("", current) == cls.BUILD_DATE.sub("", xml)
+        return cls.BUILD_DATE.sub("", current) == cls.BUILD_DATE.sub("", content)
+
+    @classmethod
+    def _write_if_changed(cls, out: Path, content: str, prefix: str) -> bool:
+        if cls._unchanged(out, content):
+            return False
+        logger.debug(f"Write path: {out}, bytes: {len(content)}")
+        fd, tmp = tempfile.mkstemp(dir=str(Config.PUBLIC_ROOT), prefix=prefix, suffix=cls.TEMP_SUFFIX)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(content)
+                f.flush()
+                os.fsync(f.fileno())
+            # mkstemp creates 0600; feeds and the index are public static files
+            # served by Caddy, so make them world-readable.
+            os.chmod(tmp, 0o644)
+            os.replace(tmp, str(out))
+        except Exception:
+            os.unlink(tmp)
+            raise
+        return True
+
+    @classmethod
+    def _feed_build_date(cls, feed: Path) -> Optional[datetime]:
+        # The date of the real feed publish: a kept feed still carries its old one.
+        try:
+            match = cls.BUILD_DATE.search(feed.read_text(encoding="utf-8"))
+            return parsedate_to_datetime(match.group(1)) if match else None
+        except (OSError, UnicodeDecodeError, TypeError, ValueError):
+            return None
 
     def process_podcast(self, podcast_name: str, config_path: Path) -> bool:
         try:
@@ -95,29 +129,21 @@ class PodcastProcessor:
             if Config.PUBLISH_XML and not self.dry_run:
                 xml = self.rss_generator.generate_feed_xml(podcast_name, validated, episodes)
                 out = Config.PUBLIC_ROOT / f"{podcast_name}.xml"
-                if self._unchanged(out, xml):
+                if self._write_if_changed(out, xml, f".{podcast_name}."):
+                    skipped_note = f" ({skipped} skipped)" if skipped else ""
+                    logger.info(f"Published {podcast_name}: {len(episodes)} episodes{skipped_note} -> {out}")
+                else:
                     logger.info(f"Unchanged {podcast_name}: {len(episodes)} episodes, kept {out}")
-                    return True
-                logger.debug(f"Write path: {out}, bytes: {len(xml)}")
-                fd, tmp = tempfile.mkstemp(
-                    dir=str(Config.PUBLIC_ROOT),
-                    prefix=f".{podcast_name}.",
-                    suffix=self.TEMP_SUFFIX,
-                )
-                try:
-                    with os.fdopen(fd, "w", encoding="utf-8") as f:
-                        f.write(xml)
-                        f.flush()
-                        os.fsync(f.fileno())
-                    # mkstemp creates 0600; feeds are public static files served
-                    # by Caddy, so make them world-readable.
-                    os.chmod(tmp, 0o644)
-                    os.replace(tmp, str(out))
-                except Exception:
-                    os.unlink(tmp)
-                    raise
-                skipped_note = f" ({skipped} skipped)" if skipped else ""
-                logger.info(f"Published {podcast_name}: {len(episodes)} episodes{skipped_note} -> {out}")
+                if validated.listed:
+                    self.index_entries.append(
+                        IndexEntry(
+                            name=podcast_name,
+                            title=validated.title or podcast_name,
+                            episode_count=len(episodes),
+                            built=self._feed_build_date(out),
+                            image=self.episode_manager.resolve_image_url(podcast_name, validated.image),
+                        )
+                    )
             else:
                 logger.info(f"Validated {podcast_name}: {len(episodes)} episodes (XML publishing disabled)")
 
@@ -139,14 +165,38 @@ class PodcastProcessor:
             except OSError as e:
                 logger.warning(f"Could not remove stale temp file {tmp.name}: {e}")
 
+    def sync_index(self) -> bool:
+        if self.dry_run or not Config.PUBLISH_XML or not Config.PUBLIC_ROOT.is_dir():
+            return True
+        out = Config.PUBLIC_ROOT / IndexPage.FILENAME
+        if not Config.PUBLISH_INDEX:
+            if IndexPage.remove_generated(out):
+                logger.info(f"Removed {out} (PUBLISH_INDEX is off)")
+            return True
+        # A page without our marker is the operator's own; never replace it.
+        if out.exists() and not IndexPage.is_generated(out):
+            logger.warning(f"Not writing the index: {out} exists and was not generated by podcastify")
+            return True
+        try:
+            written = self._write_if_changed(out, self.index_page.render(self.index_entries), f".{out.stem}.")
+        except OSError as e:
+            logger.error(f"Failed to write the index {out}: {e}")
+            return False
+        if written:
+            logger.info(f"Published index: {len(self.index_entries)} feed(s) -> {out}")
+        else:
+            logger.info(f"Unchanged index: {len(self.index_entries)} feed(s), kept {out}")
+        return True
+
     def process_all_podcasts(self) -> int:
         self.remove_stale_temp_files()
+        self.index_entries = []
         configs = self.config_manager.discover_podcast_configs()
         if not configs:
             logger.info("No podcast configurations found")
             logger.info(f"Place config files like '<name>-podcast.yaml' in {Config.PODCASTS_ROOT}")
             logger.info(f"Place media files in {Config.PUBLIC_ROOT}/<name>/")
-            return 0
+            return 0 if self.sync_index() else 1
 
         logger.info(f"Found {len(configs)} podcast configuration(s)")
         ok = 0
@@ -154,6 +204,8 @@ class PodcastProcessor:
             if self.process_podcast(name, cfg_path):
                 ok += 1
         failed = len(configs) - ok
+        if not self.sync_index():
+            failed += 1
         logger.info(f"Processing complete: {ok}/{len(configs)} successful")
         return failed
 
