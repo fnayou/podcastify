@@ -29,20 +29,42 @@ def _is_valid_name(name: str) -> bool:
 class EpisodeModel(BaseModel):
     model_config = ConfigDict(extra="allow", populate_by_name=True)
 
-    file: str
-    title: Optional[str] = None
-    description: Optional[str] = None
-    summary: Optional[str] = None
-    subtitle: Optional[str] = None
-    pub_date: Optional[datetime] = None
-    image: Optional[str] = None
-    explicit: Optional[bool] = None
-    author_name: Optional[str] = Field(None, alias="author-name")
-    season: Optional[int] = None
-    episode: Optional[int] = None
-    episode_type: Optional[str] = None
-    guid: Optional[str] = None
-    duration_hms: Optional[str] = None
+    file: str = Field(
+        description=(
+            "Media filename (`.mp3`, `.m4a`, `.mp4`, `.ogg` or `.opus`), basename only, placed in `public/<name>/`; "
+            "empty, `.` and `..` are rejected, and so is a second entry with the same basename"
+        )
+    )
+    title: Optional[str] = Field(None, description="Episode title; defaults to the filename stem")
+    description: Optional[str] = Field(None, description="Episode description")
+    summary: Optional[str] = Field(None, description="Longer summary; falls back to `description`")
+    subtitle: Optional[str] = Field(None, description="Brief subtitle")
+    pub_date: Optional[datetime] = Field(
+        None,
+        description=(
+            "ISO 8601 date or date-time, quoted or not; a value without a timezone is read as UTC, "
+            "an invalid value is logged and ignored; defaults to the file modification time"
+        ),
+    )
+    image: Optional[str] = Field(None, description="Episode image filename or URL")
+    explicit: Optional[bool] = Field(None, description="Overrides the channel `explicit` when set")
+    author_name: Optional[str] = Field(
+        None, alias="author-name", description="Overrides the channel author for this episode"
+    )
+    season: Optional[int] = Field(None, description="Season number")
+    episode: Optional[int] = Field(None, description="Episode number within the season")
+    episode_type: Optional[str] = Field(None, description="`full`, `trailer` or `bonus`")
+    guid: Optional[str] = Field(
+        None,
+        description=(
+            "Unique identifier; defaults to the SHA-1 of `<podcast>/<filename>`; "
+            "must be unique within the podcast, a duplicate rejects the whole config"
+        ),
+    )
+    duration_hms: Optional[str] = Field(
+        None,
+        description="Pre-set duration as `H:MM:SS` or `M:SS`; read from the media file with `tinytag` when omitted",
+    )
 
     @field_validator("file")
     @classmethod
@@ -77,28 +99,45 @@ class EpisodeModel(BaseModel):
 class PodcastChannelModel(BaseModel):
     model_config = ConfigDict(extra="allow", populate_by_name=True)
 
-    name: Optional[str] = None
-    title: str
-    author_name: Optional[str] = Field(None, alias="author-name")
-    author: Optional[str] = None
-    author_email: Optional[str] = Field(None, alias="author-email")
-    subtitle: Optional[str] = None
-    summary: Optional[str] = None
-    description: str
-    language: str = "en"
-    explicit: Optional[bool] = False
-    image: Optional[str] = None
-    link: Optional[str] = None
-    categories: Optional[Union[str, List[Any], Dict[str, Any]]] = None
-    type: Optional[str] = None
-    block: Optional[bool] = None
-    complete: Optional[bool] = None
-    new_feed_url: Optional[str] = None
+    name: Optional[str] = Field(
+        None,
+        description=(
+            "Optional; the name before `-podcast.yaml` is always the identifier, "
+            "and a different `name` is ignored with a warning"
+        ),
+    )
+    title: str = Field(description="Podcast title shown in podcast apps")
+    author_name: Optional[str] = Field(
+        None,
+        alias="author-name",
+        description="Author or creator name; with neither this nor `author`, the feed has no author element",
+    )
+    author: Optional[str] = Field(
+        None, description="Legacy alias, used as the author name when `author-name` is absent or empty"
+    )
+    author_email: Optional[str] = Field(None, alias="author-email", description="Contact email for the podcast owner")
+    subtitle: Optional[str] = Field(None, description="Brief subtitle shown in podcast apps")
+    summary: Optional[str] = Field(None, description="Longer summary; falls back to `description` when omitted")
+    description: str = Field(description="Short description of the podcast")
+    language: str = Field("en", description="Language code, for example `en` or `fr`")
+    explicit: Optional[bool] = Field(False, description="Whether the content is explicit")
+    image: Optional[str] = Field(None, description="Cover image filename in `public/<name>/`, or a full URL")
+    link: Optional[str] = Field(None, description="Website URL for the podcast; defaults to `PUBLIC_BASE_URL`")
+    categories: Optional[Union[str, List[Any], Dict[str, Any]]] = Field(
+        None, description="iTunes categories; see [Categories Format](#categories-format)"
+    )
+    type: Optional[str] = Field(None, description="`episodic` or `serial`")
+    block: Optional[bool] = Field(None, description="If `true`, prevents the podcast from appearing in iTunes")
+    complete: Optional[bool] = Field(None, description="If `true`, marks the podcast as complete (no new episodes)")
+    new_feed_url: Optional[str] = Field(None, description="Redirect URL for subscribers if the feed moves")
     listed: bool = Field(
         True,
         description="List this feed on the generated index page; false hides it from the page only, not from its URL",
     )
-    episodes: Optional[List[EpisodeModel]] = None
+    episodes: Optional[List[EpisodeModel]] = Field(
+        None,
+        description=("Explicit episode list; a non-empty list turns auto-discovery off, see [Episodes](#episodes)"),
+    )
 
     @model_validator(mode="after")
     def map_legacy_author(self) -> "PodcastChannelModel":

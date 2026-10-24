@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from podcastify.parser import PodcastChannelModel, validate_podcast_config
+from podcastify.parser import EpisodeModel, PodcastChannelModel, validate_podcast_config
 
 UTC = timezone.utc
 
@@ -68,6 +68,19 @@ class TestDuplicateEpisodes:
     def test_no_episodes_passes(self):
         model, err = validate_podcast_config({"title": "T", "description": "D"})
         assert err is None
+
+
+class TestFieldDescriptions:
+    @pytest.mark.parametrize("model", [PodcastChannelModel, EpisodeModel], ids=["channel", "episode"])
+    def test_every_field_has_a_description(self, model):
+        missing = [name for name, field in model.model_fields.items() if not (field.description or "").strip()]
+        assert missing == []
+
+    @pytest.mark.parametrize("model", [PodcastChannelModel, EpisodeModel], ids=["channel", "episode"])
+    def test_descriptions_are_one_line_without_a_trailing_period(self, model):
+        for name, field in model.model_fields.items():
+            assert "\n" not in field.description, name
+            assert not field.description.endswith("."), name
 
 
 class TestListed:
