@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="t d"><title id="t">podcastify</title><desc id="d">podcastify: Tiny self-hosted podcast RSS generator: private feeds from your own audio files.</desc><defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1e2030"/><stop offset="1" stop-color="#181926"/></linearGradient></defs>
+<g font-family="ui-monospace,'SF Mono',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace">
+<rect width="1280" height="640" fill="url(#bg)"/>
+<g transform="translate(59.2,51.2) scale(0.3)"><rect x="16" y="16" width="480" height="480" rx="112" fill="#1e2030" stroke="#494d64" stroke-width="8"/>
+<circle cx="150" cy="362" r="32" fill="#8aadf4"/>
+<path d="M150,262 A100,100 0 0 1 250,362" fill="none" stroke="#8aadf4" stroke-width="36" stroke-linecap="round"/>
+<path d="M150,182 A180,180 0 0 1 330,362" fill="none" stroke="#8aadf4" stroke-width="36" stroke-linecap="round"/>
+<rect x="330" y="155" width="20" height="90" rx="10" fill="#a5adcb"/>
+<rect x="368" y="115" width="20" height="170" rx="10" fill="#a5adcb"/>
+<rect x="406" y="135" width="20" height="130" rx="10" fill="#a5adcb"/>
+<rect x="444" y="170" width="20" height="60" rx="10" fill="#a5adcb"/></g>
+<text x="236" y="150" font-size="72" font-weight="700" fill="#cad3f5" text-anchor="start">podcast</text>
+<text x="538.4" y="150" font-size="72" font-weight="700" fill="#8aadf4" text-anchor="start">ify</text>
+<text x="64" y="248" font-size="30" font-weight="400" fill="#a5adcb" text-anchor="start">Tiny self-hosted podcast RSS generator</text>
+<text x="64" y="290" font-size="30" font-weight="400" fill="#a5adcb" text-anchor="start">Private feeds from your own audio files.</text>
+<rect x="64" y="320" width="1152" height="226" rx="18" fill="#1e2030" stroke="#494d64" stroke-width="2"/>
+<circle cx="96" cy="352" r="7" fill="#ed8796"/>
+<circle cx="122" cy="352" r="7" fill="#eed49f"/>
+<circle cx="148" cy="352" r="7" fill="#a6da95"/>
+<text x="96" y="410" font-size="26" font-weight="700" fill="#8aadf4" text-anchor="start">$</text>
+<text x="128" y="410" font-size="26" font-weight="400" fill="#cad3f5" text-anchor="start">docker run -d -p 8080:8080 \</text>
+<text x="128" y="444" font-size="26" font-weight="400" fill="#cad3f5" text-anchor="start">  -v ./podcasts:/app/podcasts \</text>
+<text x="128" y="478" font-size="26" font-weight="400" fill="#cad3f5" text-anchor="start">  -v ./public:/app/public \</text>
+<text x="128" y="512" font-size="26" font-weight="400" fill="#cad3f5" text-anchor="start">  fnayou/podcastify</text>
+<rect x="64" y="566" width="84" height="40" rx="20" fill="#24273a" stroke="#494d64" stroke-width="1.5"/>
+<text x="82" y="589" font-size="20" font-weight="400" fill="#b8c0e0" text-anchor="start">.m4a</text>
+<rect x="160" y="566" width="84" height="40" rx="20" fill="#24273a" stroke="#494d64" stroke-width="1.5"/>
+<text x="178" y="589" font-size="20" font-weight="400" fill="#b8c0e0" text-anchor="start">.mp3</text>
+<rect x="256" y="566" width="84" height="40" rx="20" fill="#24273a" stroke="#494d64" stroke-width="1.5"/>
+<text x="274" y="589" font-size="20" font-weight="400" fill="#b8c0e0" text-anchor="start">.mp4</text>
+<rect x="352" y="566" width="84" height="40" rx="20" fill="#24273a" stroke="#494d64" stroke-width="1.5"/>
+<text x="370" y="589" font-size="20" font-weight="400" fill="#b8c0e0" text-anchor="start">.ogg</text>
+<rect x="448" y="566" width="96" height="40" rx="20" fill="#24273a" stroke="#494d64" stroke-width="1.5"/>
+<text x="466" y="589" font-size="20" font-weight="400" fill="#b8c0e0" text-anchor="start">.opus</text>
+<text x="1216" y="594" font-size="22" font-weight="400" fill="#8087a2" text-anchor="end">docker.io/fnayou/podcastify</text>
+</g>
+</svg>
