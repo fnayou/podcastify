@@ -24,6 +24,8 @@ includes:
     taskfile: ./tasks/ci.yml
   release:
     taskfile: ./tasks/release.yml
+  art:
+    taskfile: ./tasks/art.yml
   devlocal:
     taskfile: ./Taskfile.dev.yml
     optional: true

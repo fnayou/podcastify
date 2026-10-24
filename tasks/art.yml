@@ -1,0 +1,28 @@
+version: "3"
+
+# Standard library only; a PNG is rendered beside every SVG when rsvg-convert is installed.
+# Writes only inside website/assets/images/. See docs/guides/art-setup.md.
+tasks:
+  build:
+    desc: "Regenerate the art: each SVG, then its PNG beside it (ARGS='--only banner' or '--no-png')"
+    silent: true
+    cmds:
+      - python3 -m tools.art build {{.ARGS}}
+
+  logo:
+    desc: Rebuild the logo and the favicon only (SVG and PNG)
+    silent: true
+    cmds:
+      - python3 -m tools.art logo
+
+  check:
+    desc: Check the committed SVGs are current (read-only; the art test runs the same comparison in CI)
+    silent: true
+    cmds:
+      - python3 -m tools.art check
+
+  remind:
+    desc: Print the reminder to regenerate the art, if it is due (read-only; ARGS='--staged' or '--range A..B')
+    silent: true
+    cmds:
+      - python3 -m tools.art remind {{.ARGS}}
