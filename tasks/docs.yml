@@ -1,0 +1,10 @@
+version: "3"
+
+tasks:
+  reference:
+    desc: Rewrite the generated field tables in docs/configuration.md from the models (CHECK=1 only checks)
+    cmds:
+      - |
+        PY=python3
+        [ -x .venv/bin/python ] && PY=.venv/bin/python
+        PYTHONPATH=. $PY tools/config_reference.py {{if .CHECK}}--check{{end}}

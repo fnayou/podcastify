@@ -19,29 +19,58 @@ categories:
   - "Technology"
 ```
 
-## Channel Fields
+## Fields
 
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `name` | string | No | Optional. The filename is authoritative: the name before `-podcast.yaml` is always the identifier. A `name` that differs logs `Config name '<name>' differs from filename-derived name '<filename name>'; using '<filename name>'` and is ignored. |
-| `title` | string | Yes | Podcast title shown in podcast apps. |
-| `author-name` | string | No | Author/creator name. Legacy alias: `author` is used as the author name when `author-name` is absent or empty. With neither, the feed has no author element. |
-| `author-email` | string | No | Contact email for the podcast owner. |
-| `description` | string | Yes | Short description of the podcast. |
-| `subtitle` | string | No | Brief subtitle for display in podcast apps. |
-| `summary` | string | No | Longer summary. Falls back to `description` if omitted. |
-| `language` | string | No | Language code (e.g., `en`, `fr`). Defaults to `en`. |
-| `explicit` | boolean | No | Whether content is explicit. Defaults to `false`. |
-| `image` | string | No | Cover image filename (in `public/<name>/`) or full URL. |
-| `link` | string | No | Website URL for the podcast. Defaults to `PUBLIC_BASE_URL`. |
-| `categories` | array | No | iTunes categories. See formats below. |
-| `type` | string | No | `episodic` or `serial`. |
-| `block` | boolean | No | If `true`, prevents the podcast from appearing in iTunes. |
-| `complete` | boolean | No | If `true`, marks the podcast as complete (no new episodes). |
-| `new_feed_url` | string | No | Redirect URL for subscribers if the feed moves. |
-| `listed` | boolean | No | Whether the feed appears on the index page (`PUBLISH_INDEX=true`). Defaults to `true`. `false` hides it from the page only; the feed URL stays reachable. |
+The tables below are generated from the models in `podcastify/parser.py`; do not edit them by hand. See [Contributing](contributing.md#configuration-reference).
 
-A key that is not listed here or under [Episode Fields](#episode-fields) is ignored, and a warning names it, for example `Unknown config key 'episodes[2].pubdate' ignored; check its spelling`. The config is still published.
+<!-- BEGIN GENERATED: fields -->
+
+### Channel Fields
+
+| Key | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `name` | string | No | - | Optional; the name before `-podcast.yaml` is always the identifier, and a different `name` is ignored with a warning |
+| `title` | string | Yes | - | Podcast title shown in podcast apps |
+| `author-name` | string | No | - | Author or creator name; with neither this nor `author`, the feed has no author element |
+| `author` | string | No | - | **Deprecated**, use `author-name`. Legacy alias, used as the author name when `author-name` is absent or empty |
+| `author-email` | string | No | - | Contact email for the podcast owner |
+| `subtitle` | string | No | - | Brief subtitle shown in podcast apps |
+| `summary` | string | No | - | Longer summary; falls back to `description` when omitted |
+| `description` | string | Yes | - | Short description of the podcast |
+| `language` | string | No | `en` | Language code, for example `en` or `fr` |
+| `explicit` | boolean | No | `false` | Whether the content is explicit |
+| `image` | string | No | - | Cover image filename in `public/<name>/`, or a full URL |
+| `link` | string | No | - | Website URL for the podcast; defaults to `PUBLIC_BASE_URL` |
+| `categories` | string, list or mapping | No | - | iTunes categories; see [Categories Format](#categories-format) |
+| `type` | string | No | - | `episodic` or `serial` |
+| `block` | boolean | No | - | If `true`, prevents the podcast from appearing in iTunes |
+| `complete` | boolean | No | - | If `true`, marks the podcast as complete (no new episodes) |
+| `new_feed_url` | string | No | - | Redirect URL for subscribers if the feed moves |
+| `listed` | boolean | No | `true` | List this feed on the generated index page; false hides it from the page only, not from its URL |
+| `episodes` | list of episode | No | - | Explicit episode list; a non-empty list turns auto-discovery off, see [Episodes](#episodes) |
+
+### Episode Fields
+
+| Key | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `file` | string | Yes | - | Media filename (`.mp3`, `.m4a`, `.mp4`, `.ogg` or `.opus`), basename only, placed in `public/<name>/`; empty, `.` and `..` are rejected, and so is a second entry with the same basename |
+| `title` | string | No | - | Episode title; defaults to the filename stem |
+| `description` | string | No | - | Episode description |
+| `summary` | string | No | - | Longer summary; falls back to `description` |
+| `subtitle` | string | No | - | Brief subtitle |
+| `pub_date` | date-time | No | - | ISO 8601 date or date-time, quoted or not; a value without a timezone is read as UTC, an invalid value is logged and ignored; defaults to the file modification time |
+| `image` | string | No | - | Episode image filename or URL |
+| `explicit` | boolean | No | - | Overrides the channel `explicit` when set |
+| `author-name` | string | No | - | Overrides the channel author for this episode |
+| `season` | integer | No | - | Season number |
+| `episode` | integer | No | - | Episode number within the season |
+| `episode_type` | string | No | - | `full`, `trailer` or `bonus` |
+| `guid` | string | No | - | Unique identifier; defaults to the SHA-1 of `<podcast>/<filename>`; must be unique within the podcast, a duplicate rejects the whole config |
+| `duration_hms` | string | No | - | Pre-set duration as `H:MM:SS` or `M:SS`; read from the media file with `tinytag` when omitted |
+
+<!-- END GENERATED -->
+
+A key that is not listed in these tables is ignored, and a warning names it, for example `Unknown config key 'episodes[2].pubdate' ignored; check its spelling`. The config is still published.
 
 ## Categories Format
 
@@ -94,25 +123,6 @@ episodes:
     episode_type: "full"
     guid: "custom-guid-if-you-really-want"
 ```
-
-### Episode Fields
-
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `file` | string | Yes | Media filename: `.mp3`, `.m4a`, `.mp4`, `.ogg` or `.opus` (basename only, placed in `public/<name>/`). Empty, `.` and `..` are rejected, and so is a second entry with the same basename. |
-| `title` | string | No | Episode title. Defaults to the filename stem. |
-| `description` | string | No | Episode description. |
-| `summary` | string | No | Longer summary. Falls back to `description`. |
-| `subtitle` | string | No | Brief subtitle. |
-| `pub_date` | date or datetime | No | ISO 8601 date or datetime, quoted or not. A value without a timezone is read as UTC. An invalid value is logged and ignored. Defaults to file modification time. |
-| `image` | string | No | Episode image filename or URL. |
-| `explicit` | boolean | No | Overrides channel `explicit` if set. |
-| `author-name` | string | No | Overrides channel author for this episode. |
-| `season` | integer | No | Season number. |
-| `episode` | integer | No | Episode number within season. |
-| `episode_type` | string | No | `full`, `trailer`, or `bonus`. |
-| `guid` | string | No | Unique identifier. Defaults to SHA-1 of `<podcast>/<filename>`. Must be unique within the podcast; a duplicate rejects the whole config. |
-| `duration_hms` | string | No | Pre-set duration as `H:MM:SS` or `M:SS`. If omitted, read from the media file with `tinytag`. |
 
 ## File Placement
 
