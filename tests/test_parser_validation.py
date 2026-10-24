@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from podcastify.parser import validate_podcast_config
+from podcastify.parser import PodcastChannelModel, validate_podcast_config
 
 UTC = timezone.utc
 
@@ -68,6 +68,26 @@ class TestDuplicateEpisodes:
     def test_no_episodes_passes(self):
         model, err = validate_podcast_config({"title": "T", "description": "D"})
         assert err is None
+
+
+class TestListed:
+    def test_defaults_to_true(self):
+        model, err = validate_podcast_config({"title": "T", "description": "D"})
+        assert err is None
+        assert model.listed is True
+
+    @pytest.mark.parametrize("value, expected", [(False, False), (True, True), ("no", False)])
+    def test_reads_the_listed_key(self, value, expected):
+        model, err = validate_podcast_config({"title": "T", "description": "D", "listed": value})
+        assert err is None
+        assert model.listed is expected
+
+    def test_is_a_known_key(self, caplog):
+        validate_podcast_config({"title": "T", "description": "D", "listed": False})
+        assert not [r for r in caplog.records if r.levelname == "WARNING"]
+
+    def test_has_a_field_description(self):
+        assert PodcastChannelModel.model_fields["listed"].description
 
 
 class TestUnknownKeys:

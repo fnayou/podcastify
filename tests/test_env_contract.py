@@ -54,7 +54,17 @@ class TestPathVariablesAreInternal:
 
 class TestComposeCarriesNoDuplicatedDefaults:
     @pytest.mark.parametrize(
-        "name", ["SERVICE_PORT", "RUN_ON_START", "GENERATE_INTERVAL", "PUBLISH_XML", "LOG_LEVEL", "PUID", "PGID"]
+        "name",
+        [
+            "SERVICE_PORT",
+            "RUN_ON_START",
+            "GENERATE_INTERVAL",
+            "PUBLISH_XML",
+            "PUBLISH_INDEX",
+            "LOG_LEVEL",
+            "PUID",
+            "PGID",
+        ],
     )
     def test_user_setting_is_a_bare_pass_through(self, name):
         assert re.search(rf"^\s+- {name}$", _read("docker-compose.yml"), re.M)
@@ -70,6 +80,17 @@ class TestProxyDocsShowLocalhostBinding:
     @pytest.mark.parametrize("relative", ["docs/deployment.md", "README.md"])
     def test_binding_is_shown(self, relative):
         assert '"127.0.0.1:${HOST_PORT:-8080}:${SERVICE_PORT:-8080}"' in _read(relative)
+
+
+class TestPublishIndexIsOffByDefault:
+    def test_listed_in_every_surface(self):
+        assert "PUBLISH_INDEX" in _adr_variables()
+        assert "PUBLISH_INDEX" in _env_example_variables()
+        assert "PUBLISH_INDEX" in _deployment_variables()
+
+    def test_env_example_and_dockerfile_default_to_false(self):
+        assert re.search(r"^PUBLISH_INDEX=false$", _read(".env.example"), re.M)
+        assert "PUBLISH_INDEX=false" in _read("docker/podcastify/Dockerfile")
 
 
 class TestSurfacesAgree:

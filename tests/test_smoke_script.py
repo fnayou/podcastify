@@ -38,10 +38,18 @@ class TestSmokeScript:
         assert (ROOT / "tests" / "fixtures" / "audio" / "cbr.mp3").is_file()
         assert "<itunes:duration>0:01</itunes:duration>" in text
 
-    def test_removes_its_container_on_exit(self):
+    def test_removes_its_containers_on_exit(self):
         text = SCRIPT.read_text(encoding="utf-8")
         assert "trap" in text
         assert "docker rm -f" in text
+        assert 'stop "$NAME"' in text
+        assert 'stop "$INDEX_NAME"' in text
+
+    def test_checks_the_index_is_404_by_default_and_served_when_enabled(self):
+        text = SCRIPT.read_text(encoding="utf-8")
+        assert '[ "$code" = "404" ]' in text
+        assert "-e PUBLISH_INDEX=true" in text
+        assert '/smoke.xml" "$WORK/index.html"' in text
 
     def test_takes_image_from_argument(self):
         text = SCRIPT.read_text(encoding="utf-8")

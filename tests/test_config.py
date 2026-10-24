@@ -50,6 +50,14 @@ class TestConfigFromEnv:
         monkeypatch.setenv("PUBLISH_XML", "false")
         assert Config.PUBLISH_XML is False
 
+    def test_publish_index_is_off_by_default(self, monkeypatch):
+        monkeypatch.delenv("PUBLISH_INDEX", raising=False)
+        assert Config.PUBLISH_INDEX is False
+
+    def test_publish_index_true(self, monkeypatch):
+        monkeypatch.setenv("PUBLISH_INDEX", "true")
+        assert Config.PUBLISH_INDEX is True
+
     def test_run_on_start_false(self, monkeypatch):
         monkeypatch.setenv("RUN_ON_START", "false")
         assert Config.RUN_ON_START is False
