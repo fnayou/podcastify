@@ -30,6 +30,9 @@ cache/
 # Docker artifacts (optional)
 docker-data/
 
+# Generated at docs build time (tools/art), never committed
+website/assets/images/podcastify-architecture.svg
+
 # Test / coverage
 .coverage
 htmlcov/
