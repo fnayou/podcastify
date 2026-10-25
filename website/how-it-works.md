@@ -1,5 +1,9 @@
 # How it works
 
+![The modules, the pipeline and the container layout of podcastify](assets/images/podcastify-architecture.svg)
+
+The picture above is generated from the repository at every build of this site, so it always matches the code.
+
 ## The feed pipeline
 
 ```

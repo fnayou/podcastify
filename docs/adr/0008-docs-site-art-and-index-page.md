@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted; not implemented yet. Decided by the owner on 2026-10-24 in the design
+Accepted and implemented. Decided by the owner on 2026-10-24 in the design
 sessions of issues #49 and #50, recorded by issue #115. The child tickets are
 under References.
 
