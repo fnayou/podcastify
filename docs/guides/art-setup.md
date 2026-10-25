@@ -6,7 +6,7 @@ works. It is internal documentation for contributors; the decisions are in
 
 The README banner, the logo, the favicon, the GitHub social preview and the architecture diagram are
 written by a small Python program in `tools/art/`, which uses the standard library only. They use the
-Catppuccin Macchiato palette (https://catppuccin.com/palette/) with the blue accent `#8aadf4`. Names, the
+Catppuccin Macchiato palette (https://catppuccin.com/palette/) with the yellow accent `#eed49f`. Names, the
 one-line pitch, the media formats, the module list, the settings and the container facts are read from files
 of the working tree (`.github/workflows/release.yml`, `podcastify/`, `AGENTS.md`, `.env.example`,
 `docker/podcastify/Dockerfile`), never from git. The same inputs always give the same bytes: no timestamp, no
