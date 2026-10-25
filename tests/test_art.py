@@ -15,11 +15,18 @@ from tools.art.render import Renderer
 
 ROOT = Path(__file__).resolve().parent.parent
 SVG_NS = "{http://www.w3.org/2000/svg}"
-COPIED = ("podcastify", "AGENTS.md", ".env.example", ".github/workflows/release.yml", "docker/podcastify/Dockerfile")
+COPIED = (
+    "podcastify",
+    "docs/adr",
+    "AGENTS.md",
+    ".env.example",
+    ".github/workflows/release.yml",
+    "docker/podcastify/Dockerfile",
+)
 VIEW_BOXES = {
     "podcastify-logo": "0 0 512 512",
     "favicon": "0 0 64 64",
-    "podcastify-readme-banner": "0 0 1280 400",
+    "podcastify-readme-banner": "0 0 1670 558",
     "podcastify-social-preview": "0 0 1280 640",
 }
 
@@ -95,9 +102,9 @@ class TestCommittedImages:
             used = set(re.findall(r"#[0-9a-fA-F]{6}\b", output.make(facts)))
             assert used <= allowed, f"{output.name}: {sorted(used - allowed)}"
 
-    def test_the_accent_is_blue(self, facts):
+    def test_the_accent_is_yellow(self, facts):
         for output in ArtCli.OUTPUTS:
-            assert "#8aadf4" in output.make(facts)
+            assert "#eed49f" in output.make(facts)
 
 
 class TestFacts:

@@ -32,6 +32,7 @@ class Facts:
     public_root: str
     cache_root: str
     entrypoint: Tuple[str, ...]
+    decisions: int
 
     @property
     def pitch_lines(self) -> Tuple[str, ...]:
@@ -131,6 +132,9 @@ class FactsReader:
             "entrypoint": tuple(json.loads(entrypoint)),
         }
 
+    def _decisions(self) -> int:
+        return len(list((self.root / "docs" / "adr").glob("[0-9][0-9][0-9][0-9]-*.md")))
+
     def read(self) -> Facts:
         image, pitch = self._release()
         return Facts(
@@ -140,5 +144,6 @@ class FactsReader:
             media_types=self._media_types(),
             modules=self._modules(),
             settings=self._settings(),
+            decisions=self._decisions(),
             **self._container(),
         )
