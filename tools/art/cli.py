@@ -25,6 +25,7 @@ INPUT_GLOBS = (
     ".env.example",
     ".github/workflows/release.yml",
     "AGENTS.md",
+    "docs/adr/*.md",
 )
 
 

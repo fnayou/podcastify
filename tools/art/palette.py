@@ -29,7 +29,8 @@ class Palette:
         "mantle": "#1e2030",
         "crust": "#181926",
     }
-    ACCENT = "blue"
+    ACCENT = "yellow"
 
 
 C = Palette.COLORS
+ACCENT = C[Palette.ACCENT]

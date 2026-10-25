@@ -3,7 +3,7 @@ from pathlib import PurePosixPath
 from typing import List, Sequence, Tuple
 
 from tools.art.facts import Facts, Module
-from tools.art.palette import C
+from tools.art.palette import ACCENT, C
 from tools.art.svg import CHAR_WIDTH, Doc, num, text_width
 
 WIDTH = 1920
@@ -59,9 +59,9 @@ class Architecture:
     @staticmethod
     def _band(doc: Doc, y: float, h: float, number: int, title: str, sub: str) -> None:
         doc.rect(MARGIN, y, WIDTH - 2 * MARGIN, h, C["mantle"], C["surface1"], rx=18, sw=1.5)
-        doc.rect(MARGIN, y, 9, h, C["blue"], None, rx=4)
+        doc.rect(MARGIN, y, 9, h, ACCENT, None, rx=4)
         label = f"{number}  {title}"
-        doc.text(MARGIN + 32, y + 40, label, 24, C["blue"], 700, spacing=2)
+        doc.text(MARGIN + 32, y + 40, label, 24, ACCENT, 700, spacing=2)
         doc.text(MARGIN + 32 + text_width(label, 24) + 28, y + 40, sub, 17, C["overlay1"])
 
     @classmethod
@@ -98,7 +98,7 @@ class Architecture:
         ]
         cls._box(doc, x0, top, box_w, BOX_H, "sources", sources, C["lavender"])
         for i, module in enumerate(chain):
-            cls._module_box(doc, module, x0 + (i + 1) * (box_w + GAP), top, box_w, C["blue"], False)
+            cls._module_box(doc, module, x0 + (i + 1) * (box_w + GAP), top, box_w, ACCENT, False)
         feeds = [f"{facts.public_root}/<name>.xml", "iTunes RSS, atomic write"]
         cls._box(doc, x0 + (count - 2) * (box_w + GAP), top, box_w, BOX_H, "feeds", feeds, C["lavender"])
         caddy = [f":{facts.port}", f"serves {facts.public_root}"]
@@ -129,11 +129,11 @@ class Architecture:
         )
         for title, lines in steps:
             cls._arrow(doc, x - GAP + 4, top + BOX_H / 2, x - 4)
-            cls._box(doc, x, top, 270, BOX_H, title, lines, C["blue"])
+            cls._box(doc, x, top, 270, BOX_H, title, lines, ACCENT)
             x += 270 + GAP
         cls._arrow(doc, x - GAP + 4, top + BOX_H / 2, x - 4)
-        cls._box(doc, x, top, 270, 68, "generator", ["python app.py"], C["blue"])
-        cls._box(doc, x, top + 82, 270, 68, "caddy", [f":{facts.port} file server"], C["blue"])
+        cls._box(doc, x, top, 270, 68, "generator", ["python app.py"], ACCENT)
+        cls._box(doc, x, top + 82, 270, 68, "caddy", [f":{facts.port} file server"], ACCENT)
         x += 270 + GAP
         volumes = (
             (facts.podcasts_root, "configs in"),

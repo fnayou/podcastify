@@ -1,28 +1,28 @@
 from tools.art.banner import Parts
 from tools.art.facts import Facts
-from tools.art.palette import C
+from tools.art.palette import ACCENT, C
 from tools.art.svg import Doc
 
 WIDTH, HEIGHT = 1280, 640
 
 
 class Social:
-    """The GitHub social preview (1280x640): name, pitch and the docker run command to try it."""
+    """The GitHub social preview (1280x640): name, pitch, the docker run command to try it and four facts."""
 
     @classmethod
     def svg(cls, facts: Facts) -> str:
-        doc = Doc(WIDTH, HEIGHT, facts.name, f"{facts.name}: {facts.pitch}")
+        doc = Doc(WIDTH, HEIGHT, facts.image, f"{facts.name}: {facts.pitch}")
+        center = WIDTH / 2
         Parts.background(doc)
-        Parts.mark(doc, 64, 56, 0.3)
-        Parts.title(doc, 236, 150, facts.name, 72)
-        for i, line in enumerate(facts.pitch_lines):
-            doc.text(64, 248 + i * 42, line, 30, C["subtext0"])
-        doc.rect(64, 320, WIDTH - 128, 226, C["mantle"], C["surface1"], rx=18, sw=2)
+        Parts.card(doc, 32, 32, WIDTH - 64, HEIGHT - 64)
+        Parts.headline(doc, facts, center, 150, 72, 100)
+        Parts.subtitle(doc, facts.pitch_lines[0], center, 214, 30)
+        doc.rect(260, 258, 760, 192, C["mantle"], C["surface1"], rx=16, sw=2, opacity=0.6)
         for i, color in enumerate((C["red"], C["yellow"], C["green"])):
-            doc.circle(96 + i * 26, 352, 7, color)
-        doc.text(96, 410, "$", 26, C["blue"], 700)
+            doc.circle(292 + i * 26, 288, 7, color)
+        doc.text(292, 340, "$", 24, ACCENT, 700)
         for i, line in enumerate(facts.run_hint):
-            doc.text(128, 410 + i * 34, line, 26, C["text"])
-        Parts.chips(doc, 64, 566, facts.media_types, 20)
-        doc.text(WIDTH - 64, 594, f"docker.io/{facts.image}", 22, C["overlay1"], anchor="end")
+            doc.text(322, 340 + i * 30, line, 24, C["text"])
+        for i, (value, label) in enumerate(Parts.stats(facts)):
+            Parts.stat(doc, 190 + i * 300, 528, value, label, "middle", 42)
         return doc.render()

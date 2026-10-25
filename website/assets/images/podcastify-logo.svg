@@ -1,10 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="t d"><title id="t">podcastify</title><desc id="d">Logo of podcastify: broadcast arcs next to an audio waveform on a dark rounded square.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="t d"><title id="t">podcastify</title><desc id="d">Logo of podcastify: a microphone with the feed symbol beside it on a dark rounded square.</desc>
 <rect x="16" y="16" width="480" height="480" rx="112" fill="#1e2030" stroke="#494d64" stroke-width="8"/>
-<circle cx="150" cy="362" r="32" fill="#8aadf4"/>
-<path d="M150,262 A100,100 0 0 1 250,362" fill="none" stroke="#8aadf4" stroke-width="36" stroke-linecap="round"/>
-<path d="M150,182 A180,180 0 0 1 330,362" fill="none" stroke="#8aadf4" stroke-width="36" stroke-linecap="round"/>
-<rect x="330" y="155" width="20" height="90" rx="10" fill="#a5adcb"/>
-<rect x="368" y="115" width="20" height="170" rx="10" fill="#a5adcb"/>
-<rect x="406" y="135" width="20" height="130" rx="10" fill="#a5adcb"/>
-<rect x="444" y="170" width="20" height="60" rx="10" fill="#a5adcb"/>
+<rect x="216" y="100" width="80" height="150" rx="40" fill="#eed49f"/>
+<path d="M186,206 A70,70 0 0 0 326,206" fill="none" stroke="#eed49f" stroke-width="24" stroke-linecap="round"/>
+<path d="M256,276 V372 M196,384 H316" fill="none" stroke="#eed49f" stroke-width="24" stroke-linecap="round"/>
+<circle cx="366" cy="196" r="12" fill="#eed49f"/>
+<path d="M366,158 A38,38 0 0 1 404,196" fill="none" stroke="#eed49f" stroke-width="18" stroke-linecap="round"/>
+<path d="M366,124 A72,72 0 0 1 438,196" fill="none" stroke="#eed49f" stroke-width="18" stroke-linecap="round"/>
 </svg>

@@ -44,9 +44,9 @@ class TestPalette:
     def test_matches_catppuccin_macchiato(self):
         assert Palette.COLORS == MACCHIATO
 
-    def test_accent_is_blue(self):
-        assert Palette.ACCENT == "blue"
-        assert C[Palette.ACCENT] == "#8aadf4"
+    def test_accent_is_yellow(self):
+        assert Palette.ACCENT == "yellow"
+        assert C[Palette.ACCENT] == "#eed49f"
 
     def test_every_value_is_a_lowercase_hex_colour(self):
         assert all(len(v) == 7 and v.startswith("#") and v == v.lower() for v in C.values())
