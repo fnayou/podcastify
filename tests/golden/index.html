@@ -6,9 +6,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Podcasts</title>
 <style>
-:root { color-scheme: light dark; --bg: #fafafa; --fg: #1a1a1a; --muted: #5c5c5c; --line: #d8d8d8; --link: #0b57d0; }
+:root { color-scheme: light dark; --bg: #eff1f5; --fg: #4c4f69; --muted: #6c6f85; --line: #ccd0da; --link: #4c4f69; --accent: #df8e1d; }
 @media (prefers-color-scheme: dark) {
-  :root { --bg: #121212; --fg: #ececec; --muted: #a0a0a0; --line: #333; --link: #8ab4f8; }
+  :root { --bg: #24273a; --fg: #cad3f5; --muted: #a5adcb; --line: #494d64; --link: #eed49f; --accent: #eed49f; }
 }
 body { margin: 0; background: var(--bg); color: var(--fg); font: 1rem/1.5 system-ui, sans-serif; }
 main { max-width: 42rem; margin: 0 auto; padding: 2rem 1rem; }
@@ -18,7 +18,7 @@ ul { list-style: none; margin: 0; padding: 0; }
 li { display: flex; gap: 1rem; padding: 1rem 0; border-top: 1px solid var(--line); }
 img { width: 4.5rem; height: 4.5rem; border-radius: 0.5rem; object-fit: cover; flex: none; }
 p { margin: 0.25rem 0 0; overflow-wrap: anywhere; }
-a { color: var(--link); }
+a { color: var(--link); text-decoration-color: var(--accent); text-decoration-thickness: 2px; text-underline-offset: 3px; }
 .meta, .empty { color: var(--muted); }
 </style>
 </head>
