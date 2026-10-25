@@ -1,0 +1,81 @@
+/*
+ * Catppuccin (https://catppuccin.com/palette/) with the yellow accent.
+ * Dark: Macchiato. Light: Latte, where the yellow only underlines and highlights
+ * because yellow text on a light page is too faint to read.
+ */
+
+[data-md-color-scheme="slate"] {
+  --md-default-bg-color:            #24273a; /* Base */
+  --md-default-fg-color:            #cad3f5; /* Text */
+  --md-default-fg-color--light:     #b8c0e0; /* Subtext1 */
+  --md-default-fg-color--lighter:   #a5adcb; /* Subtext0 */
+  --md-default-fg-color--lightest:  #6e738d; /* Overlay0 */
+
+  --md-primary-fg-color:            #eed49f; /* Yellow */
+  --md-primary-fg-color--light:     #f5a97f; /* Peach */
+  --md-primary-fg-color--dark:      #eed49f;
+  --md-primary-bg-color:            #1e2030; /* Mantle */
+  --md-primary-bg-color--light:     #cad3f5;
+
+  --md-accent-fg-color:             #eed49f;
+  --md-accent-fg-color--transparent: rgba(238, 212, 159, 0.1);
+  --md-accent-bg-color:             #1e2030;
+
+  --md-code-bg-color:               #1e2030;
+  --md-code-fg-color:               #cad3f5;
+
+  --md-typeset-a-color:             #eed49f;
+
+  --md-footer-bg-color:             #1e2030;
+  --md-footer-bg-color--dark:       #181926; /* Crust */
+}
+
+[data-md-color-scheme="slate"] .md-header {
+  background-color: #1e2030;
+  color: #cad3f5;
+}
+
+[data-md-color-scheme="slate"] .md-typeset code {
+  background-color: #363a4f; /* Surface0 */
+  color: #cad3f5;
+}
+
+[data-md-color-scheme="default"] {
+  --md-default-bg-color:            #eff1f5; /* Base */
+  --md-default-fg-color:            #4c4f69; /* Text */
+  --md-default-fg-color--light:     #5c5f77; /* Subtext1 */
+  --md-default-fg-color--lighter:   #6c6f85; /* Subtext0 */
+  --md-default-fg-color--lightest:  #9ca0b0; /* Overlay0 */
+
+  --md-primary-fg-color:            #df8e1d; /* Yellow */
+  --md-primary-fg-color--light:     #fe640b; /* Peach */
+  --md-primary-fg-color--dark:      #df8e1d;
+  --md-primary-bg-color:            #4c4f69;
+  --md-primary-bg-color--light:     #5c5f77;
+
+  --md-accent-fg-color:             #df8e1d;
+  --md-accent-fg-color--transparent: rgba(223, 142, 29, 0.1);
+
+  --md-code-bg-color:               #e6e9ef; /* Mantle */
+  --md-code-fg-color:               #4c4f69;
+
+  --md-typeset-a-color:             #4c4f69;
+
+  --md-footer-bg-color:             #dce0e8; /* Crust */
+  --md-footer-fg-color:             #4c4f69;
+  --md-footer-fg-color--light:      #5c5f77;
+  --md-footer-fg-color--lighter:    #6c6f85;
+  --md-footer-bg-color--dark:       #dce0e8;
+}
+
+[data-md-color-scheme="default"] .md-header {
+  background-color: #e6e9ef;
+  color: #4c4f69;
+}
+
+[data-md-color-scheme="default"] .md-typeset a {
+  text-decoration: underline;
+  text-decoration-color: #df8e1d;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}

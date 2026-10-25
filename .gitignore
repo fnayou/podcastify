@@ -49,3 +49,4 @@ podcasts/*
 public/*
 !public/.gitkeep
 .ropeproject/
+site/
