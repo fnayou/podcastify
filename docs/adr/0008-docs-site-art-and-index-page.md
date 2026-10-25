@@ -84,8 +84,9 @@ architecture diagram. It is produced by a stdlib-only Python program in
 this repository's `tools/` folder.
 
 - The palette is Catppuccin (https://catppuccin.com/palette/), variant
-  Macchiato, with the accent blue `#8aadf4`: the same identity as the owner's
-  dotfiles.
+  Macchiato, with the accent yellow `#eed49f`: the dotfiles identity (banner layout
+  and palette) with a yellow accent in place of blue. The same palette styles
+  the generated index page (Latte in light mode) and the documentation site.
 - The committed images are SVG with a PNG sidecar of the same base name. The
   tasks write them (`task art:build`, `task art:logo` and so on); the PNG needs
   `rsvg-convert`, which is optional tooling.
