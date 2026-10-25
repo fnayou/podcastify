@@ -1,22 +1,13 @@
 # Deployment
 
+!!! note "This site tracks `main`"
+    These pages describe the `latest` image and the `main` branch. For an older version, use the
+    [GitHub Releases](https://github.com/fnayou/podcastify/releases) and pin that image tag.
+
 ## Quick Run from Docker Hub
 
-Image: `fnayou/podcastify` (public)
-
-```bash
-export HOST_PORT=1234
-export PUBLIC_BASE_URL="http://localhost:${HOST_PORT}"
-
-docker run --rm \
-  -e SERVICE_PORT=8080 \
-  -e PUBLIC_BASE_URL="${PUBLIC_BASE_URL}" \
-  -p ${HOST_PORT}:8080 \
-  -v "$(pwd)/public:/app/public" \
-  -v "$(pwd)/podcasts:/app/podcasts" \
-  -v "$(pwd)/cache:/app/.cache" \
-  fnayou/podcastify:latest
-```
+Image: `fnayou/podcastify` (public). The `docker run` command is in [Getting Started](getting-started.md#1-run-the-image);
+this page covers Compose, the environment variables and hardening.
 
 ## Docker Compose
 
@@ -68,14 +59,14 @@ PGID=1000
 | `PUID` | `1000` | uid the container drops to when started as root. Match the owner of the bind-mounts. |
 | `PGID` | `1000` | gid the container drops to when started as root. |
 | `RUN_ON_START` | `true` | Run generator on container startup. Accepts `true/yes/1/on`, case-insensitive; any other value skips it. |
-| `GENERATE_INTERVAL` | `0` | Seconds between checks for new or changed configs and media; on a change, feeds are regenerated without a restart. `0` turns it off. Polls, so it works on network and Docker Desktop bind mounts. See [runtime](runtime.md#automatic-regeneration). |
+| `GENERATE_INTERVAL` | `0` | Seconds between checks for new or changed configs and media; on a change, feeds are regenerated without a restart. `0` turns it off. Polls, so it works on network and Docker Desktop bind mounts. See [runtime](how-it-works.md#automatic-regeneration). |
 | `PUBLISH_XML` | `true` | Write XML files to disk. Accepts `true/yes/1/on` and `false/no/0/off`; other values warn and count as false. |
 | `PUBLISH_INDEX` | `false` | Write `index.html` next to the feeds so `/` lists them (title, feed URL, episode count, last build date, cover). Only effective while `PUBLISH_XML` is on. Same boolean values as `PUBLISH_XML`. See [the index page](#index-page). |
 | `LOG_LEVEL` | `INFO` | Logging verbosity: `DEBUG`, `INFO`, `WARNING`, or `ERROR`. |
 
 Compose passes these through from `.env` or your shell. A variable you leave unset takes the image default shown above.
 
-The paths inside the container are fixed: `/app/public`, `/app/podcasts` and `/app/.cache`. To keep your data elsewhere on the host, change the left side of the volume mounts in `docker-compose.yml` (see [ADR 0004](adr/0004-path-env-vars-are-internal.md)).
+The paths inside the container are fixed: `/app/public`, `/app/podcasts` and `/app/.cache`. To keep your data elsewhere on the host, change the left side of the volume mounts in `docker-compose.yml` (see [ADR 0004](https://github.com/fnayou/podcastify/blob/main/docs/adr/0004-path-env-vars-are-internal.md)).
 
 ## Index Page
 
@@ -141,7 +132,7 @@ server {
 
 ## Security Hardening
 
-The image supports two runtimes (see [runtime](runtime.md)):
+The image supports two runtimes (see [How it works](how-it-works.md#user-and-permissions)):
 
 - **Default:** starts as root, chowns `public/`, `podcasts/` and `.cache/` to `PUID`/`PGID`, then drops privileges with `su-exec`. Needs the `CHOWN`, `SETUID` and `SETGID` capabilities, so do not combine it with `cap_drop: ["ALL"]`.
 - **Hardened:** pin the container user. The entrypoint then skips chown and `su-exec`. The bind-mounts must already be owned by that uid.

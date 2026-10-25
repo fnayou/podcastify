@@ -13,7 +13,7 @@ from typing import Any, List, Optional, Sequence, Tuple, Union, get_args, get_or
 
 from podcastify.parser import EpisodeModel, PodcastChannelModel
 
-DEFAULT_PAGE = Path(__file__).resolve().parent.parent / "docs" / "configuration.md"
+DEFAULT_PAGE = Path(__file__).resolve().parent.parent / "website" / "configuration.md"
 
 
 class MarkersError(Exception):

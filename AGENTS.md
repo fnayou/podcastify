@@ -21,7 +21,9 @@ public/                 # media in <name>/, feeds in <name>.xml
 templates/              # podcast config scaffold used by `task podcastify:new`
 tests/                  # pytest suite
 tasks/                  # Taskfile includes (dev, docker, podcastify)
-docs/                   # human docs; docs/adr/ decisions; docs/agents/ skill config
+website/                # public site pages (Zensical docs_dir, config in mkdocs.yml); generated art in website/assets/images/
+docs/                   # internal docs, never published; docs/adr/ decisions; docs/agents/ skill config
+tools/                  # art generator (tools/art/), configuration reference generator
 GLOSSARY.md             # domain vocabulary
 ```
 
@@ -52,7 +54,7 @@ task worktree:verify            # check lane tooling and the merge refusals
 | `RSSGenerator` | `rss.py` | iTunes RSS XML |
 | `PodcastProcessor` | `cli.py` | load, validate, generate, atomic write |
 
-Invariants and gotchas: `docs/architecture-notes.md`. Runtime and container: `docs/runtime.md`.
+Invariants and gotchas: `docs/architecture-notes.md`. Runtime and container: `docs/runtime.md`. User-facing pages: `website/`.
 
 ## Rules
 

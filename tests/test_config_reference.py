@@ -11,7 +11,7 @@ from podcastify.parser import EpisodeManager, EpisodeModel, PodcastChannelModel,
 from tools.config_reference import ConfigReference, MarkersError, main
 
 ROOT = Path(__file__).resolve().parent.parent
-PAGE = ROOT / "docs" / "configuration.md"
+PAGE = ROOT / "website" / "configuration.md"
 BEGIN = ConfigReference.BEGIN
 END = ConfigReference.END
 
@@ -38,7 +38,7 @@ def page(tmp_path):
 
 class TestCommittedPage:
     def test_region_equals_the_generated_text(self, reference):
-        assert reference.is_current(), "docs/configuration.md is stale; run `task docs:reference`"
+        assert reference.is_current(), "website/configuration.md is stale; run `task docs:reference`"
 
     def test_markers_appear_exactly_once(self):
         text = PAGE.read_text(encoding="utf-8")
