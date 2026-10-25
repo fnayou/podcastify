@@ -1,0 +1,44 @@
+site_name: fnayou/podcastify
+site_description: Tiny self-hosted podcast RSS generator, private feeds from your own audio files.
+site_url: https://fnayou.github.io/podcastify/
+repo_url: https://github.com/fnayou/podcastify
+repo_name: fnayou/podcastify
+
+docs_dir: website
+
+theme:
+  name: material
+  logo: assets/images/podcastify-logo.png
+  favicon: assets/images/favicon.png
+  palette:
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/weather-night
+        name: Switch to light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to dark mode
+  features:
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+
+extra_css:
+  - assets/stylesheets/podcastify.css
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Deployment: deployment.md
+  - Configuration: configuration.md
+  - How it works: how-it-works.md
+  - Troubleshooting: troubleshooting.md
