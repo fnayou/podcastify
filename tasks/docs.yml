@@ -1,6 +1,15 @@
 version: "3"
 
 tasks:
+  build:
+    desc: Build the site into site/ in strict mode, with a fresh architecture diagram (needs requirements-docs.txt)
+    cmds:
+      - |
+        PY=python3
+        [ -x .venv/bin/python ] && PY=.venv/bin/python
+        $PY -m tools.art build --only architecture --no-png
+        $PY -m zensical build --strict
+
   reference:
     desc: Rewrite the generated field tables in website/configuration.md from the models (CHECK=1 only checks)
     cmds:
