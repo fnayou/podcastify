@@ -3,6 +3,7 @@
 Tiny self-hosted podcast RSS generator. Drop MP3s into a folder, add a YAML config, get iTunes-compatible RSS feeds. One Docker container (Caddy + Python).
 
 - Repository: https://github.com/fnayou/podcastify
+- Site: https://fnayou.github.io/podcastify/
 - Docker Hub: https://hub.docker.com/r/fnayou/podcastify
 - License: MIT
 
