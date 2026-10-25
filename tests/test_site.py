@@ -104,3 +104,75 @@ class TestSharedContent:
         text = _read(WEBSITE / page)
         assert "This site tracks `main`" in text
         assert "https://github.com/fnayou/podcastify/releases" in text
+
+
+WORKFLOW = ROOT / ".github" / "workflows" / "docs.yml"
+
+
+def _workflow():
+    return yaml.safe_load(_read(WORKFLOW))
+
+
+def _triggers(workflow):
+    return workflow.get("on", workflow.get(True))
+
+
+class TestDocsWorkflow:
+    def test_every_action_is_pinned_by_full_sha_with_a_version_comment(self):
+        uses = re.findall(r"^\s+uses: (\S+)(.*)$", _read(WORKFLOW), re.M)
+        assert uses
+        for ref, rest in uses:
+            assert re.fullmatch(r"[\w.-]+/[\w.-]+@[0-9a-f]{40}", ref), ref
+            assert re.fullmatch(r" # v\d+(\.\d+)*", rest), f"{ref} needs a version comment"
+
+    def test_pull_requests_build_only_for_documentation_inputs_and_never_deploy(self):
+        workflow = _workflow()
+        paths = _triggers(workflow)["pull_request"]["paths"]
+        assert {"website/**", "mkdocs.yml", "podcastify/parser.py", "tools/**", ".github/workflows/docs.yml"} <= set(
+            paths
+        )
+        assert "pull_request" in _read(WORKFLOW).split("deploy:")[1].split("steps:")[0]
+
+    def test_deploy_runs_only_from_main_in_the_pages_environment(self):
+        deploy = _workflow()["jobs"]["deploy"]
+        assert "github.ref == 'refs/heads/main'" in deploy["if"]
+        assert deploy["environment"]["name"] == "github-pages"
+        assert deploy["permissions"] == {"pages": "write", "id-token": "write"}
+        assert deploy["needs"] == ["build"]
+
+    def test_the_build_is_read_only_strict_and_makes_the_diagram(self):
+        workflow = _workflow()
+        assert workflow["permissions"] == {"contents": "read"}
+        steps = "\n".join(step.get("run", "") for step in workflow["jobs"]["build"]["steps"])
+        assert "zensical build --strict" in steps
+        assert "tools.art build --only architecture --no-png" in steps
+
+    def test_pushes_to_main_and_manual_runs_trigger_it(self):
+        triggers = _triggers(_workflow())
+        assert triggers["push"]["branches"] == ["main"]
+        assert "workflow_dispatch" in triggers
+
+    def test_the_pages_concurrency_group_is_not_cancelled(self):
+        concurrency = _workflow()["concurrency"]
+        assert "'pages'" in concurrency["group"]
+        assert "pull_request" in str(concurrency["cancel-in-progress"])
+
+    def test_docs_only_changes_skip_the_docker_job(self):
+        ci = _read(ROOT / ".github" / "workflows" / "ci.yml")
+        assert "docs/*|website/*|mkdocs.yml|requirements-docs.txt|*.md" in ci
+
+
+class TestDocsRequirements:
+    def test_every_requirement_is_pinned_and_zensical_is_included(self):
+        lines = [line for line in _read(ROOT / "requirements-docs.txt").splitlines() if line.strip()]
+        assert all(re.fullmatch(r"[\w.-]+==[\w.]+", line) for line in lines)
+        assert any(line.startswith("zensical==") for line in lines)
+
+
+class TestArchitecturePicture:
+    def test_how_it_works_shows_the_generated_diagram(self):
+        assert "assets/images/podcastify-architecture.svg" in _read(WEBSITE / "how-it-works.md")
+
+    def test_the_diagram_is_not_committed(self):
+        ignored = _read(ROOT / ".gitignore")
+        assert "podcastify-architecture.svg" in ignored
