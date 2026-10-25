@@ -27,11 +27,11 @@ def _env_example_variables():
 
 
 def _deployment_variables():
-    return set(re.findall(r"^\| `([A-Z_]+)` \|", _read("docs/deployment.md"), re.M))
+    return set(re.findall(r"^\| `([A-Z_]+)` \|", _read("website/deployment.md"), re.M))
 
 
 class TestPathVariablesAreInternal:
-    @pytest.mark.parametrize("relative", ["docker-compose.yml", ".env.example", "docs/deployment.md", "README.md"])
+    @pytest.mark.parametrize("relative", ["docker-compose.yml", ".env.example", "website/deployment.md", "README.md"])
     def test_not_offered_as_settings(self, relative):
         text = _read(relative)
         for name in PATH_VARS:
@@ -77,7 +77,7 @@ class TestComposeCarriesNoDuplicatedDefaults:
 
 
 class TestProxyDocsShowLocalhostBinding:
-    @pytest.mark.parametrize("relative", ["docs/deployment.md", "README.md"])
+    @pytest.mark.parametrize("relative", ["website/deployment.md"])
     def test_binding_is_shown(self, relative):
         assert '"127.0.0.1:${HOST_PORT:-8080}:${SERVICE_PORT:-8080}"' in _read(relative)
 

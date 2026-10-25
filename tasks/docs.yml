@@ -2,7 +2,7 @@ version: "3"
 
 tasks:
   reference:
-    desc: Rewrite the generated field tables in docs/configuration.md from the models (CHECK=1 only checks)
+    desc: Rewrite the generated field tables in website/configuration.md from the models (CHECK=1 only checks)
     cmds:
       - |
         PY=python3

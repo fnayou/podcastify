@@ -131,7 +131,7 @@ The generator must be able to write `public/` (feeds), `.cache/` (duration cache
 
 - Set `PUID` and `PGID` in `.env` to the owner of your mounted folders (`id -u`, `id -g`), then restart: `task docker:restart`.
 - On a Linux host you can fix ownership with `task docker:fix:perms UID=$(id -u) GID=$(id -g)`.
-- If you pin the container user (`user:` in compose, hardened mode), the entrypoint skips chown, so the mounts must already belong to that uid. See [Deployment](deployment.md#security-hardening) and [runtime](runtime.md#non-root-via-puidpgid).
+- If you pin the container user (`user:` in compose, hardened mode), the entrypoint skips chown, so the mounts must already belong to that uid. See [Deployment](deployment.md#security-hardening) and [How it works](how-it-works.md#user-and-permissions).
 - A write failure shows up as `ERROR podcastify.cli: Failed to process <name>: [Errno 13] Permission denied: ...` with a traceback.
 
 ## Log Inspection

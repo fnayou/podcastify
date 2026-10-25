@@ -21,7 +21,7 @@ categories:
 
 ## Fields
 
-The tables below are generated from the models in `podcastify/parser.py`; do not edit them by hand. See [Contributing](contributing.md#configuration-reference).
+The tables below are generated from the models in `podcastify/parser.py`; do not edit them by hand. See [Contributing](https://github.com/fnayou/podcastify/blob/main/docs/contributing.md#configuration-reference).
 
 <!-- BEGIN GENERATED: fields -->
 

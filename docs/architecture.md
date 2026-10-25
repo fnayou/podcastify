@@ -2,7 +2,7 @@
 
 ## Overview
 
-Podcastify is a Python **package** (`podcastify/`) + thin `app.py` entry point. Reads YAML configs, discovers MP3 files, extracts metadata, generates iTunes-compatible RSS feeds. See [deployment](deployment.md) for container runtime.
+Podcastify is a Python **package** (`podcastify/`) + thin `app.py` entry point. Reads YAML configs, discovers MP3 files, extracts metadata, generates iTunes-compatible RSS feeds. See [deployment](../website/deployment.md) for container runtime.
 
 ## Modules and Classes
 
