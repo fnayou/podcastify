@@ -7,293 +7,46 @@
 [![GitHub Stars](https://img.shields.io/github/stars/fnayou/podcastify)](https://github.com/fnayou/podcastify)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/fnayou/podcastify/blob/main/LICENSE)
 
-Create private podcast feeds from your own MP3s with minimal setup. Drop MP3s into a folder, add a simple YAML file, and Podcastify builds an iTunes-compatible RSS feed. Serve everything (XML + media) from one container (Caddy + Python) via Docker.
+Create private podcast feeds from your own audio files with minimal setup. Drop files into a folder, add a simple YAML file, and Podcastify builds an iTunes-compatible RSS feed. Serve everything (XML and media) from one container (Caddy and Python).
 
-- GitHub repository: **https://github.com/fnayou/podcastify**
-- Docker Hub image: **https://hub.docker.com/r/fnayou/podcastify**
-- Docker Hub profile: **https://hub.docker.com/u/fnayou**
-- Author GitHub: **https://github.com/fnayou**
+## Quick start
 
-## Documentation
+```bash
+docker run -d --name podcastify \
+  -p 8080:8080 \
+  -e PUBLIC_BASE_URL=http://localhost:8080 \
+  -v "$(pwd)/podcasts:/app/podcasts" \
+  -v "$(pwd)/public:/app/public" \
+  -v "$(pwd)/cache:/app/.cache" \
+  fnayou/podcastify:latest
+```
 
-- [Getting Started](https://github.com/fnayou/podcastify/blob/main/docs/getting-started.md) — Install, run, first feed
-- [Configuration](https://github.com/fnayou/podcastify/blob/main/docs/configuration.md) — Complete YAML reference
-- [Deployment](https://github.com/fnayou/podcastify/blob/main/docs/deployment.md) — Docker, reverse proxy, hardening
-- [Architecture](https://github.com/fnayou/podcastify/blob/main/docs/architecture.md) — How it works internally
-- [Troubleshooting](https://github.com/fnayou/podcastify/blob/main/docs/troubleshooting.md) — Common issues and fixes
-- [Contributing](https://github.com/fnayou/podcastify/blob/main/docs/contributing.md) — Dev setup, style, PRs
-- [Releases](https://github.com/fnayou/podcastify/releases) — Release notes for new versions (`CHANGELOG.md` is frozen history up to v1.1.1)
-
----
+Then add a podcast: [Getting Started](https://fnayou.github.io/podcastify/getting-started/).
 
 ## Features
 
-- Simple layout: `./podcasts/*.yaml` for configs, `./public/<name>/` for media and images.
-- Auto-discovery of episodes if you omit the `episodes:` list.
-- Duration extraction for MP3, M4A, MP4, OGG and Opus with `tinytag` (pure Python; falls back gracefully).
-- iTunes fields: author, owner, subtitle, summary, explicit, categories, episode types, seasons.
-- Clean XML: stable GUIDs (SHA-1), configurable language, empty optional tags omitted, `atom:link rel="self"`, `itunes:explicit` as `true`/`false`.
-- Optional index page at `/` listing your feeds (`PUBLISH_INDEX=true`, off by default; `listed: false` hides a feed from it).
-- Single container image: Caddy (static hosting) + Python generator.
-- Developer-friendly Taskfile (contributors only) with namespaced commands like `task docker:up`, `task podcastify:generate`.
-- Configurable ports: choose any host port (e.g., `1234`) via `.env` / Compose. Caddy listens on `${SERVICE_PORT}` inside the container.
+- Episodes discovered from a folder, or listed explicitly; durations for MP3, M4A, MP4, OGG and Opus.
+- iTunes fields, stable GUIDs, clean XML, and a feed file rewritten only when its content changes.
+- Optional index page at `/` and automatic regeneration when configs or media change.
+- One image, no database, no account.
 
----
+## Documentation
 
-## Run from Docker Hub
+The documentation site tracks `main`; older versions are in the releases.
 
-Image: `fnayou/podcastify` (public)
+- [Getting Started](https://fnayou.github.io/podcastify/getting-started/): install, run, first feed
+- [Deployment](https://fnayou.github.io/podcastify/deployment/): Compose, environment variables, reverse proxy, hardening
+- [Configuration](https://fnayou.github.io/podcastify/configuration/): the YAML reference
+- [How it works](https://fnayou.github.io/podcastify/how-it-works/): the pipeline, the image, permissions
+- [Troubleshooting](https://fnayou.github.io/podcastify/troubleshooting/): common issues and fixes
+- [Contributing](https://github.com/fnayou/podcastify/blob/main/docs/contributing.md): development setup, style, pull requests
+- [Releases](https://github.com/fnayou/podcastify/releases): release notes for each version
 
-### Quick run
+## Links
 
-```bash
-# choose host port and base URL
-export HOST_PORT=1234
-export PUBLIC_BASE_URL="http://localhost:${HOST_PORT}"
-
-docker run --rm \
-  -e SERVICE_PORT=8080 \
-  -e PUBLIC_BASE_URL="${PUBLIC_BASE_URL}" \
-  -p ${HOST_PORT}:8080 \
-  -v "$(pwd)/public:/app/public" \
-  -v "$(pwd)/podcasts:/app/podcasts" \
-  -v "$(pwd)/cache:/app/.cache" \
-  fnayou/podcastify:latest
-# or pin a version:
-# fnayou/podcastify:v1.1.1
-```
-
-### docker-compose.yml
-
-```yaml
-services:
-  podcastify:
-    image: fnayou/podcastify:latest
-    ports:
-      - "${HOST_PORT:-8080}:${SERVICE_PORT:-8080}"
-    environment:
-      - SERVICE_PORT
-      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://localhost:${HOST_PORT:-8080}}
-      - RUN_ON_START
-      - GENERATE_INTERVAL
-      - PUBLISH_XML
-      - PUBLISH_INDEX
-      - LOG_LEVEL
-      - PUID
-      - PGID
-    volumes:
-      - ./public:/app/public
-      - ./podcasts:/app/podcasts
-      - ./cache:/app/.cache
-    restart: unless-stopped
-```
-
-Create a `.env` file to set `HOST_PORT` and `PUBLIC_BASE_URL`; see [Environment Variables](https://github.com/fnayou/podcastify/blob/main/docs/deployment.md#environment-variables).
-
-For production behind a reverse proxy at `https://podcasts.domain.tld`, set `PUBLIC_BASE_URL=https://podcasts.domain.tld` and forward to the container’s `${SERVICE_PORT}` (default 8080). Publish the port on the loopback interface only, so the plain-HTTP port is not reachable around the proxy:
-
-```yaml
-    ports:
-      - "127.0.0.1:${HOST_PORT:-8080}:${SERVICE_PORT:-8080}"
-```
-
----
-
-## Directory structure
-
-```
-.
-├─ app.py                # CLI entry point
-├─ podcastify/           # config, parser, media, rss, cli, logging_config
-├─ tasks/                # Taskfile includes (dev, docker, podcastify, worktree)
-├─ templates/            # podcast config scaffold for task podcastify:new
-├─ tests/                # pytest suite
-├─ docs/                 # human docs; docs/adr/ holds decisions
-├─ docker/podcastify/    # Dockerfile, Caddy config and entrypoint (local builds)
-│  ├─ Dockerfile
-│  ├─ Caddyfile          # serves /app/public on ${SERVICE_PORT}
-│  └─ entrypoint.sh
-├─ podcasts/             # <name>-podcast.yaml lives here
-│  └─ example-podcast.yaml
-├─ public/               # served statically by Caddy
-│  └─ example/
-│     ├─ cover.jpg
-│     ├─ ep01.mp3
-│     └─ episode.png
-├─ docker-compose.yml
-├─ Taskfile.yml
-├─ .env                  # optional env vars
-└─ README.md
-```
-
-- Configs go in `./podcasts` as `name-podcast.yaml`.
-- Media and images live in `./public/<name>/`.
-- The feed is generated to `./public/<name>.xml`.
-
----
-
-## Requirements
-
-- Docker and Docker Compose
-- [Task](https://taskfile.dev) (go-task) for convenient commands — optional if you just use `docker compose`
-- Linux watchers (optional): `inotifywait` from `inotify-tools`
-- YAML linter (optional): `yamllint`
-
----
-
-## Environment variables (.env)
-
-Variables, defaults and a sample `.env` are documented in [Environment Variables](https://github.com/fnayou/podcastify/blob/main/docs/deployment.md#environment-variables).
-
-By default, Caddy serves `./public`. Change the published host port via `HOST_PORT` in `.env` or directly in `docker-compose.yml`.
-
----
-
-## Caddyfile
-
-The image ships a Caddyfile that listens on `${SERVICE_PORT}` and serves `/app/public`; see [Caddyfile](https://github.com/fnayou/podcastify/blob/main/docs/deployment.md#caddyfile).
-
----
-
-## Security hardening
-
-For defense-in-depth Compose settings, see [Security Hardening](https://github.com/fnayou/podcastify/blob/main/docs/deployment.md#security-hardening). Hardened mode pins the container user with `user: "1000:1000"`; the default root start needs the `CHOWN`, `SETUID` and `SETGID` capabilities, so do not combine it with a drop-all capability setting.
-
----
-
-## Quickstart (local development with Taskfile)
-
-Task is for **contributors and local development** only. End users can run the published Docker image without installing Task.
-
-1. Clone and configure
-   ```bash
-   git clone https://github.com/fnayou/podcastify
-   cd podcastify
-   cp .env.example .env   # set HOST_PORT if you want a custom port
-   ```
-
-2. Start the stack
-   ```bash
-   task docker:up
-   ```
-
-3. Create a podcast
-   ```bash
-   # scaffold a new config: podcasts/myshow-podcast.yaml
-   task podcastify:new NAME=myshow
-
-   # add media under public/myshow/
-   mkdir -p public/myshow
-   cp /path/to/ep01.mp3 public/myshow/
-   cp /path/to/cover.jpg public/myshow/
-   ```
-
-4. Generate feeds
-   ```bash
-   task podcastify:generate
-   ```
-
-5. Subscribe
-   - Feed URL: `http://localhost:${HOST_PORT}/myshow.xml`
-   - Media files: `http://localhost:${HOST_PORT}/myshow/ep01.mp3`
-
----
-
-## YAML config example
-
-Minimal example: `podcasts/myshow-podcast.yaml`
-
-```yaml
-name: "myshow"
-title: "My Private Show"
-author-name: "Your Name"
-author-email: "you@example.com"
-description: "Personal feed for testing"
-language: "en"
-explicit: false
-image: "cover.jpg"   # place in ./public/myshow/cover.jpg
-categories:
-  - "Technology"
-  - ["Society & Culture", "Personal Journals"]
-
-# Optional: list episodes explicitly.
-# If omitted, Podcastify will auto-discover *.mp3 in ./public/myshow/
-episodes:
-  - file: "ep01.mp3"     # basename only is used internally
-    title: "Hello World"
-    description: "First episode"
-    pub_date: "2025-01-01T08:00:00Z"
-    image: "episode.png" # optional; resolve from ./public/myshow/
-    explicit: false
-    season: 1
-    episode: 1
-    episode_type: "full" # full | trailer | bonus
-    guid: "custom-guid-if-you-really-want"  # otherwise auto-generated
-```
-
-Notes:
-
-- `file`: only the basename is used; put the MP3 in `public/<name>/`.
-- `image` at channel or episode level can be a filename (served from `public/<name>/`) or a full URL.
-- Categories input accepted as:
-  - `"Technology"`
-  - `["Technology", "Education"]`
-  - `[["Society & Culture", "Personal Journals"]]`
-  - `[{ name: "Technology", sub: "Software How-To" }]`
-- If `pub_date` is missing or invalid, the file modification time is used.
-- Durations are read from the media file with `tinytag`; if that fails, the `<itunes:duration>` tag is omitted.
-
----
-
-## Task commands (development)
-
-```bash
-task                          # show task list
-
-# Docker (local stack)
-task docker:up                # build and start container
-task docker:down              # stop and remove
-task docker:restart           # restart
-task docker:status            # ps + recent logs
-task docker:logs              # follow logs
-task docker:logs:recent       # recent logs only
-task docker:logs:errors       # grep errors/warnings
-task docker:shell             # shell into container
-task docker:build:quick       # quick image rebuild
-task docker:pull              # rebuild with freshly pulled base images
-task docker:compose:ps        # docker compose ps
-task docker:compose:config    # resolved compose config
-task docker:clean             # down + remove this project's volumes
-task docker:clean:all         # feeds + containers + images
-
-# Podcastify app
-task podcastify:generate      # run the generator now
-task podcastify:new NAME=myshow
-task podcastify:watch         # watch ./podcasts (Linux, inotifywait)
-task podcastify:watch-public  # watch ./public (Linux, inotifywait)
-task podcastify:clean:feeds   # delete generated XML
-
-# Development
-task dev:setup                # .venv, all requirements, git hooks
-task dev:test                 # run tests
-task dev:test:coverage        # tests with 90% coverage gate
-task dev:validate             # coverage + docker build
-task doctor                   # tools, versions, directories, compose file
-```
-
----
-
-## How it works
-
-- On `task docker:up`, the container starts Caddy and optionally runs the generator at boot (`RUN_ON_START=true`).
-- Set `GENERATE_INTERVAL` to a number of seconds and the container regenerates feeds when configs or media change, without a restart. The default `0` turns it off.
-- You can run the generator any time with `task podcastify:generate`.
-- A feed file is rewritten only when its content changes; `<lastBuildDate>` alone does not count.
-- The XML `<generator>` tag is `podcastify`.
-- Episode GUIDs default to a SHA-1 of `<podcast>/<filename>` and are not permalinks.
-
----
+- GitHub: https://github.com/fnayou/podcastify
+- Docker Hub: https://hub.docker.com/r/fnayou/podcastify
 
 ## License
 
-MIT — see [`LICENSE`](https://github.com/fnayou/podcastify/blob/main/LICENSE).
+MIT, see [`LICENSE`](https://github.com/fnayou/podcastify/blob/main/LICENSE).
