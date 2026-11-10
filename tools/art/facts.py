@@ -27,7 +27,6 @@ class Facts:
     settings: Tuple[Tuple[str, str], ...]
     port: int
     base_image: str
-    caddy_image: str
     podcasts_root: str
     public_root: str
     cache_root: str
@@ -125,7 +124,6 @@ class FactsReader:
         return {
             "port": int(self._match(relative, r"^EXPOSE (\d+)", text)),
             "base_image": self._match(relative, r"^FROM (python:\S+)", text),
-            "caddy_image": self._match(relative, r"^FROM (caddy:\S+)", text),
             "podcasts_root": self._match(relative, r"PODCASTS_ROOT=(\S+)", text),
             "public_root": self._match(relative, r"PUBLIC_ROOT=(\S+)", text),
             "cache_root": self._match(relative, r"CACHE_ROOT=(\S+)", text),

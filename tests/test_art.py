@@ -132,7 +132,6 @@ class TestFacts:
     def test_container_facts_come_from_the_dockerfile(self, facts):
         assert facts.port == 8080
         assert facts.base_image.startswith("python:")
-        assert facts.caddy_image.startswith("caddy:")
         assert facts.public_root == "/app/public" and facts.podcasts_root == "/app/podcasts"
         assert facts.entrypoint[-1] == "/entrypoint.sh"
 
@@ -353,12 +352,11 @@ class TestArchitecture:
         for expected in (
             "sources",
             "feeds",
-            "caddy",
+            "nginx",
             "tini",
             "entrypoint.sh",
             ":8080",
             facts.base_image,
-            facts.caddy_image,
         ):
             assert expected in svg, expected
         for key, _ in facts.settings:

@@ -78,7 +78,7 @@ the images yourself.
 ## 5. The architecture diagram
 
 `podcastify-architecture.svg` shows the pipeline (sources, `parser`, `media`, `rss`, `cli`, the feeds and
-Caddy), the support modules, the container (image, `tini`, `entrypoint.sh`, the generator, Caddy and the three
+nginx), the support modules, the container (image, `tini`, `entrypoint.sh`, the generator, nginx and the three
 mounted folders) and the settings of `.env.example`. A module added to `podcastify/` appears in the support row
 on the next run without a change to the generator.
 

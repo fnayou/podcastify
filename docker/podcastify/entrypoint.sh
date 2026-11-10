@@ -79,11 +79,25 @@ if [ "$generate_interval" -gt 0 ]; then
   $RUNAS python /app/app.py watch --interval "$generate_interval" $watch_args &
 fi
 
-echo "🌐 Starting Caddy on :${SERVICE_PORT:-8080}"
+case "${SERVICE_PORT:-8080}" in
+  ''|*[!0-9]*)
+    echo "❌ SERVICE_PORT='${SERVICE_PORT}' is not a port number"
+    exit 1
+    ;;
+esac
+SERVICE_PORT="${SERVICE_PORT:-8080}"
 
-# Caddy runs in the foreground and logs to stdout itself — no supervisor. tini
+echo "🌐 Starting nginx on :${SERVICE_PORT}"
+
+# Rendered as $RUNAS so nginx can write beside it. nginx runs in the foreground
+# (`daemon off` in the config), errors to stderr and the access log through a
+# FIFO that `cat` copies to stdout (as root, which owns the pipe) — no supervisor. tini
 # is PID 1 for the whole container life (Dockerfile ENTRYPOINT), forwards
-# signals to this script, then to Caddy, and reaps the optional background
-# watcher, which stops with the container when Caddy exits; $RUNAS is empty in
+# signals to this script, then to nginx, and reaps the optional background
+# watcher, which stops with the container when nginx exits; $RUNAS is empty in
 # hardened mode, su-exec in root mode.
-exec $RUNAS caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+$RUNAS mkdir -p /tmp/nginx
+$RUNAS sh -c "sed 's/__SERVICE_PORT__/${SERVICE_PORT}/' /etc/nginx/podcastify.conf > /tmp/nginx/nginx.conf"
+$RUNAS sh -c 'rm -f /tmp/nginx/access.log && mkfifo /tmp/nginx/access.log'
+cat /tmp/nginx/access.log &
+exec $RUNAS nginx -c /tmp/nginx/nginx.conf

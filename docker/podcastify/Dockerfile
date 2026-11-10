@@ -1,8 +1,3 @@
-# Caddy binary from the official image. The alpine `caddy` package lags
-# upstream (2.10.0) and bundles old Go deps flagged by Docker Scout; the
-# official image ships the patched release built with the current Go toolchain.
-FROM caddy:2.11.7-alpine AS caddy
-
 FROM python:3.12-alpine3.22
 
 # System deps (keep small, versions pinned to alpine 3.22 stable).
@@ -12,10 +7,8 @@ FROM python:3.12-alpine3.22
 RUN apk upgrade --no-cache && apk add --no-cache \
     tini \
     su-exec \
-    ca-certificates
-
-# Statically-linked Caddy binary; no shared-lib deps, safe to copy standalone.
-COPY --from=caddy /usr/bin/caddy /usr/bin/caddy
+    ca-certificates \
+    nginx
 
 WORKDIR /app
 
@@ -26,7 +19,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # App + configs
 COPY app.py /app/
 COPY podcastify/ /app/podcastify/
-COPY docker/podcastify/Caddyfile        /etc/caddy/Caddyfile
+COPY docker/podcastify/nginx.conf        /etc/nginx/podcastify.conf
 COPY docker/podcastify/entrypoint.sh    /entrypoint.sh
 
 # Ensure entrypoint is executable and LF line endings
@@ -40,8 +33,8 @@ RUN mkdir -p /app/public /app/podcasts /app/.cache
 # Defaults (override via compose/.env)
 # PUID/PGID default to 1000 and are honored by the entrypoint; set them to match
 # the host bind-mount owner (server, NAS, desktop) so generated files aren't
-# written as root. Caddy data/config land under XDG_* (the cache volume) and
-# supervisord logs/pid under /tmp, so nothing writes to the read-only root FS.
+# written as root. nginx keeps its rendered config, pid file and temp dirs under
+# /tmp, so nothing writes to the read-only root FS (mount a tmpfs on /tmp).
 ENV SERVICE_PORT=8080 \
   PUBLIC_BASE_URL=http://localhost:8080 \
   PODCASTS_ROOT=/app/podcasts \
@@ -55,9 +48,7 @@ ENV SERVICE_PORT=8080 \
   PYTHONUNBUFFERED=1 \
   PUID=1000 \
   PGID=1000 \
-  HOME=/app \
-  XDG_DATA_HOME=/app/.cache/caddy \
-  XDG_CONFIG_HOME=/app/.cache/caddy
+  HOME=/app
 
 EXPOSE 8080
 

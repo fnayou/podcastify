@@ -34,7 +34,7 @@ folder on a volume so a restart does not read every file again.
 
 ## The image
 
-One container runs Caddy in the foreground under `tini`. Caddy serves `/app/public` (feeds, media and the optional
+One container runs nginx in the foreground under `tini`. nginx serves `/app/public` (feeds, media and the optional
 index) on `SERVICE_PORT`. The generator runs once at boot when `RUN_ON_START` is true, and on demand with
 `docker exec podcastify /entrypoint.sh generate`.
 
@@ -42,7 +42,7 @@ index) on `SERVICE_PORT`. The generator runs once at boot when `RUN_ON_START` is
 |---|---|
 | `/app/podcasts` | your `<name>-podcast.yaml` files (read) |
 | `/app/public` | media, generated feeds and index (served) |
-| `/app/.cache` | duration cache and Caddy's own data |
+| `/app/.cache` | duration cache |
 
 ### Automatic regeneration
 
@@ -59,5 +59,5 @@ mounted folders must already belong to that user. See [Security hardening](deplo
 
 ### Healthcheck
 
-The image checks `/healthz`, a fixed `200 ok` that Caddy does not log, every 30 seconds, with a 120 second start period
+The image checks `/healthz`, a fixed `200 ok` that nginx does not log, every 30 seconds, with a 120 second start period
 for the first generation on a large library.

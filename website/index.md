@@ -3,7 +3,7 @@
 Tiny self-hosted podcast RSS generator: private feeds from your own audio files.
 
 Drop audio files into a folder, add a small YAML file, and Podcastify writes an iTunes-compatible RSS feed. One
-container (Caddy and Python) serves the feeds and the media.
+container (nginx and Python) serves the feeds and the media.
 
 !!! note "This site tracks `main`"
     These pages describe the `latest` image and the `main` branch. For an older version, use the
