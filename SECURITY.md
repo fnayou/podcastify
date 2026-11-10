@@ -18,6 +18,6 @@ You will get an acknowledgement as soon as the maintainer sees the report. A fix
 
 ## Scope
 
-In scope: the `podcastify` Python package, the container image and its entrypoint, the shipped Caddy configuration, and the GitHub Actions workflows.
+In scope: the `podcastify` Python package, the container image and its entrypoint, the shipped nginx configuration, and the GitHub Actions workflows.
 
 Out of scope: vulnerabilities in upstream base images or packages with no fix available yet. Those are tracked by the image scans and updated through dependency updates.

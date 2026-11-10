@@ -64,11 +64,13 @@ docker run -d --name "$NAME" \
 fetch -o /dev/null "http://127.0.0.1:${PORT}/healthz" || fail "/healthz did not return 200 within 30 s"
 fetch "http://127.0.0.1:${PORT}/smoke.xml" > "$WORK/smoke.xml" || fail "/smoke.xml not served"
 grep -q '<rss' "$WORK/smoke.xml" || fail "/smoke.xml is not an RSS feed"
+ctype="$(curl -sS --max-time 2 -o /dev/null -w '%{content_type}' "http://127.0.0.1:${PORT}/smoke.xml")"
+[ "$ctype" = "application/rss+xml; charset=utf-8" ] || fail "/smoke.xml content type is ${ctype}"
 grep -q '<itunes:duration>0:01</itunes:duration>' "$WORK/smoke.xml" || fail "episode duration not read from the media file"
 fetch -o /dev/null "http://127.0.0.1:${PORT}/smoke/ep01.mp3" || fail "episode media not served"
 
-owner="$(docker exec "$NAME" sh -c 'stat -c %u /proc/$(pidof caddy)')"
-[ "$owner" = "1000" ] || fail "caddy runs as uid ${owner}, expected 1000"
+owner="$(docker exec "$NAME" sh -c 'stat -c %u /proc/$(pidof -s nginx)')"
+[ "$owner" = "1000" ] || fail "nginx runs as uid ${owner}, expected 1000"
 
 code="$(status "http://127.0.0.1:${PORT}/")"
 [ "$code" = "404" ] || fail "/ answered ${code} by default, expected 404"

@@ -1,6 +1,6 @@
 # Podcastify
 
-Tiny self-hosted podcast RSS generator. Drop MP3s into a folder, add a YAML config, get iTunes-compatible RSS feeds. One Docker container (Caddy + Python).
+Tiny self-hosted podcast RSS generator. Drop MP3s into a folder, add a YAML config, get iTunes-compatible RSS feeds. One Docker container (nginx + Python).
 
 - Repository: https://github.com/fnayou/podcastify
 - Site: https://fnayou.github.io/podcastify/
@@ -9,14 +9,14 @@ Tiny self-hosted podcast RSS generator. Drop MP3s into a folder, add a YAML conf
 
 ## Stack
 
-Python 3.12 (`podcastify/` package, thin `app.py` entry), PyYAML, pydantic, Caddy (static server), tini (PID 1), Docker Compose, Taskfile (go-task).
+Python 3.12 (`podcastify/` package, thin `app.py` entry), PyYAML, pydantic, nginx (static server), tini (PID 1), Docker Compose, Taskfile (go-task).
 
 ## Layout
 
 ```
 app.py                  # CLI entry point
 podcastify/             # config, parser, media, rss, cli, logging_config
-docker/podcastify/      # Dockerfile, Caddyfile, entrypoint.sh
+docker/podcastify/      # Dockerfile, nginx.conf, entrypoint.sh
 podcasts/               # YAML configs: <name>-podcast.yaml
 public/                 # media in <name>/, feeds in <name>.xml
 templates/              # podcast config scaffold used by `task podcastify:new`

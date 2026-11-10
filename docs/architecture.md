@@ -68,7 +68,7 @@ Scans `./podcasts/` for files matching `<name>-podcast.yaml`. The `<name>` prefi
 
 A result is not usable when it is not finite, is zero or negative, or is under 1 s for a file of at least 100 KB.
 
-Results are cached in memory by `(path, mtime)` and persisted to `<CACHE_ROOT>/.podcastify-cache.json` (`/app/.cache` in the image, outside the directory Caddy serves). The file holds a format version; entries in any other version are ignored, so every file is read again once. Entries for files that no longer exist are dropped when the cache is saved, and a cache left in `PUBLIC_ROOT` by an older version is migrated on first load. See [ADR 0003](adr/0003-duration-cache-location.md) and [ADR 0006](adr/0006-tinytag-for-durations.md).
+Results are cached in memory by `(path, mtime)` and persisted to `<CACHE_ROOT>/.podcastify-cache.json` (`/app/.cache` in the image, outside the directory nginx serves). The file holds a format version; entries in any other version are ignored, so every file is read again once. Entries for files that no longer exist are dropped when the cache is saved, and a cache left in `PUBLIC_ROOT` by an older version is migrated on first load. See [ADR 0003](adr/0003-duration-cache-location.md) and [ADR 0006](adr/0006-tinytag-for-durations.md).
 
 ### Image Resolution
 

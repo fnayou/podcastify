@@ -2,7 +2,7 @@
 !app.py
 !requirements.txt
 !podcastify/
-!docker/podcastify/Caddyfile
+!docker/podcastify/nginx.conf
 !docker/podcastify/entrypoint.sh
 **/__pycache__/
 **/*.py[cod]

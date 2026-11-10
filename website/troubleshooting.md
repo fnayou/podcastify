@@ -96,7 +96,7 @@ cp /path/to/*.mp3 public/myshow/
 
 **Symptom:** The container log shows `Generator exited non-zero; continuing to serve existing content` after `Running generator at startup...`.
 
-**Cause:** At least one podcast failed during the startup run, so the generator exited with status 1. Caddy still starts and serves the feeds already on disk. The log ends the run with `Generator finished: N podcast(s) failed`.
+**Cause:** At least one podcast failed during the startup run, so the generator exited with status 1. nginx still starts and serves the feeds already on disk. The log ends the run with `Generator finished: N podcast(s) failed`.
 
 **Fix:** Read the `ERROR` and `WARNING` lines above it (see the entries above) and fix the config or files. Then run `task podcastify:generate`, or set `GENERATE_INTERVAL` so a failed run is retried on the next change.
 
@@ -127,7 +127,7 @@ cat .env | grep PUBLISH_XML
 
 ## Permissions
 
-The generator must be able to write `public/` (feeds), `.cache/` (duration cache) and read `podcasts/` and the media. In the default start the container runs as root, gives `.cache/`, `public/` and `public/*.xml` to `PUID`/`PGID` (default `1000`), and runs the generator and Caddy as that user. Media and configs keep their host owner, so they only need to be readable by that uid.
+The generator must be able to write `public/` (feeds), `.cache/` (duration cache) and read `podcasts/` and the media. In the default start the container runs as root, gives `.cache/`, `public/` and `public/*.xml` to `PUID`/`PGID` (default `1000`), and runs the generator and nginx as that user. Media and configs keep their host owner, so they only need to be readable by that uid.
 
 - Set `PUID` and `PGID` in `.env` to the owner of your mounted folders (`id -u`, `id -g`), then restart: `task docker:restart`.
 - On a Linux host you can fix ownership with `task docker:fix:perms UID=$(id -u) GID=$(id -g)`.

@@ -57,7 +57,7 @@ class PodcastProcessor:
                 f.flush()
                 os.fsync(f.fileno())
             # mkstemp creates 0600; feeds and the index are public static files
-            # served by Caddy, so make them world-readable.
+            # served by nginx, so make them world-readable.
             os.chmod(tmp, 0o644)
             os.replace(tmp, str(out))
         except Exception:

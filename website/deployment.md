@@ -54,7 +54,7 @@ PGID=1000
 | Variable | Default | Description |
 |---|---|---|
 | `HOST_PORT` | `8080` | Host port exposed to the outside. |
-| `SERVICE_PORT` | `8080` | Container port Caddy listens on. |
+| `SERVICE_PORT` | `8080` | Container port nginx listens on. |
 | `PUBLIC_BASE_URL` | `http://localhost:8080` | Base URL used in generated enclosure and image links. |
 | `PUID` | `1000` | uid the container drops to when started as root. Match the owner of the bind-mounts. |
 | `PGID` | `1000` | gid the container drops to when started as root. |
@@ -84,9 +84,9 @@ The podcastify generator logs at different levels. The visibility depends on how
 
 | How generator runs | In `docker compose logs -f`? | Why |
 |---|---|---|
-| Boot, `RUN_ON_START=true` | YES | `entrypoint.sh` runs the generator under `tini` (PID 1) before `exec`-ing Caddy; stdout is inherited by the container |
-| Watcher, `GENERATE_INTERVAL` above `0` | YES | `entrypoint.sh` starts it in the background before `exec`-ing Caddy; stdout is inherited by the container |
-| Caddy | YES | Caddy runs in the foreground under `tini` and logs to stdout |
+| Boot, `RUN_ON_START=true` | YES | `entrypoint.sh` runs the generator under `tini` (PID 1) before `exec`-ing nginx; stdout is inherited by the container |
+| Watcher, `GENERATE_INTERVAL` above `0` | YES | `entrypoint.sh` starts it in the background before `exec`-ing nginx; stdout is inherited by the container |
+| nginx | YES | nginx runs in the foreground under `tini`; its access log and errors reach the container log |
 | `docker compose exec podcastify /entrypoint.sh generate` | NO | separate process attached to the exec client's terminal, not PID 1 — prints in your shell. Runs as `PUID`/`PGID` like the boot run, so files are never root-owned |
 | `docker compose run --rm podcastify generate` | NO | separate temporary container, its own log stream |
 
@@ -150,46 +150,66 @@ services:
     cap_drop: ["ALL"]
 ```
 
-The root filesystem is read-only. `public/`, `podcasts/` and `cache/` stay writable bind-mounts, and Caddy keeps its data under the cache mount (`/app/.cache`). The cache is outside `public/`, so it is never served.
+The root filesystem is read-only. `public/`, `podcasts/` and `cache/` stay writable bind-mounts, and nginx keeps its config, pid file and temp files under `/tmp`, which is why the example mounts a tmpfs there. The cache is outside `public/`, so it is never served.
 
-## Caddyfile
+## nginx configuration
 
-Shipped Caddyfile uses `{$SERVICE_PORT}`, turns the admin API off, serves a fixed `/healthz` response for the container healthcheck, does not list directories, and hides dotfiles. Responses carry `X-Content-Type-Options: nosniff` and no `Server` header. MP3s are cached for one day without `immutable`, so an episode fixed in place under the same filename reaches listeners within a day:
+The shipped `docker/podcastify/nginx.conf` listens on `SERVICE_PORT`, serves a fixed `/healthz` response for the container healthcheck, does not list directories, and answers 404 for dotfiles. Responses carry `X-Content-Type-Options: nosniff` and `Access-Control-Allow-Origin: *`. nginx always sends `Server: nginx`, without a version. MP3s are cached for one day without `immutable`, so an episode fixed in place under the same filename reaches listeners within a day:
 
-```caddy
-{
-  admin off
+```nginx
+events {
+    worker_connections 1024;
 }
 
-:{$SERVICE_PORT} {
-  root * /app/public
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
 
-  @health path /healthz
-  respond @health "ok" 200
-  log_skip @health
-  encode gzip
-  header Access-Control-Allow-Origin "*"
-  header X-Content-Type-Options "nosniff"
-  header -Server
+    server_tokens off;
+    absolute_redirect off;
+    sendfile on;
 
-  @rss path *.xml
-  header @rss Content-Type "application/rss+xml; charset=utf-8"
-  header @rss Cache-Control "public, max-age=300, must-revalidate"
+    gzip on;
+    gzip_vary on;
+    gzip_types text/plain text/css text/xml application/xml application/rss+xml application/json;
 
-  @mp3 path *.mp3
-  header @mp3 Cache-Control "public, max-age=86400"
-  header @mp3 Content-Type "audio/mpeg"
+    map $uri $podcastify_cache_control {
+        default "";
+        ~*\.xml$ "public, max-age=300, must-revalidate";
+        ~*\.mp3$ "public, max-age=86400";
+        ~*\.(jpg|jpeg|png|webp)$ "public, max-age=86400";
+    }
 
-  @images path *.jpg *.jpeg *.png *.webp
-  header @images Cache-Control "public, max-age=86400"
+    server {
+        listen 8080;
+        root /app/public;
 
-  file_server {
-    hide .*
-  }
+        add_header Access-Control-Allow-Origin "*" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Cache-Control $podcastify_cache_control always;
 
-  log {
-    output stdout
-    format console
-  }
+        error_page 403 = @not_found;
+        location @not_found {
+            return 404;
+        }
+
+        location = /healthz {
+            access_log off;
+            default_type text/plain;
+            return 200 "ok";
+        }
+
+        location ~ /\. {
+            return 404;
+        }
+
+        location ~* \.xml$ {
+            types { application/rss+xml xml; }
+            charset utf-8;
+            charset_types application/rss+xml;
+        }
+    }
 }
 ```
+
+The listing leaves out the process settings (`daemon off`, the pid file, the temp paths and the log targets) that the file in the repository sets so that nginx can run read-only as any user.

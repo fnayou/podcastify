@@ -7,7 +7,7 @@
 [![GitHub Stars](https://img.shields.io/github/stars/fnayou/podcastify)](https://github.com/fnayou/podcastify)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/fnayou/podcastify/blob/main/LICENSE)
 
-Create private podcast feeds from your own audio files with minimal setup. Drop files into a folder, add a simple YAML file, and Podcastify builds an iTunes-compatible RSS feed. Serve everything (XML and media) from one container (Caddy and Python).
+Create private podcast feeds from your own audio files with minimal setup. Drop files into a folder, add a simple YAML file, and Podcastify builds an iTunes-compatible RSS feed. Serve everything (XML and media) from one container (nginx and Python).
 
 ## Quick start
 

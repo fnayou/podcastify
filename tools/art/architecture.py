@@ -101,8 +101,8 @@ class Architecture:
             cls._module_box(doc, module, x0 + (i + 1) * (box_w + GAP), top, box_w, ACCENT, False)
         feeds = [f"{facts.public_root}/<name>.xml", "iTunes RSS, atomic write"]
         cls._box(doc, x0 + (count - 2) * (box_w + GAP), top, box_w, BOX_H, "feeds", feeds, C["lavender"])
-        caddy = [f":{facts.port}", f"serves {facts.public_root}"]
-        cls._box(doc, x0 + (count - 1) * (box_w + GAP), top, box_w, BOX_H, "caddy", caddy, C["lavender"])
+        server = [f":{facts.port}", f"serves {facts.public_root}"]
+        cls._box(doc, x0 + (count - 1) * (box_w + GAP), top, box_w, BOX_H, "nginx", server, C["lavender"])
         for i in range(count - 1):
             left = x0 + i * (box_w + GAP) + box_w
             cls._arrow(doc, left + 4, top + BOX_H / 2, left + GAP - 4)
@@ -120,7 +120,7 @@ class Architecture:
     def _container(cls, doc: Doc, facts: Facts, y: float) -> None:
         top = y + HEAD
         x = MARGIN + PAD
-        image = [facts.base_image, f"+ {facts.caddy_image}", "caddy binary copied over"]
+        image = [facts.base_image, "+ nginx from apk", "static file server"]
         cls._box(doc, x, top, 330, BOX_H, "image", image, C["lavender"])
         x += 330 + GAP
         steps = (
@@ -133,7 +133,7 @@ class Architecture:
             x += 270 + GAP
         cls._arrow(doc, x - GAP + 4, top + BOX_H / 2, x - 4)
         cls._box(doc, x, top, 270, 68, "generator", ["python app.py"], ACCENT)
-        cls._box(doc, x, top + 82, 270, 68, "caddy", [f":{facts.port} file server"], ACCENT)
+        cls._box(doc, x, top + 82, 270, 68, "nginx", [f":{facts.port} file server"], ACCENT)
         x += 270 + GAP
         volumes = (
             (facts.podcasts_root, "configs in"),
@@ -178,14 +178,14 @@ class Architecture:
             (
                 1,
                 "PIPELINE",
-                "YAML and media in, feed XML out, served by Caddy",
+                "YAML and media in, feed XML out, served by nginx",
                 cls._pipeline_height(facts),
                 cls._pipeline,
             ),
             (
                 2,
                 "CONTAINER",
-                "one image, tini as PID 1, the generator and Caddy",
+                "one image, tini as PID 1, the generator and nginx",
                 cls._container_height(),
                 cls._container,
             ),
@@ -204,7 +204,7 @@ class Architecture:
             int(total),
             f"{facts.name}: architecture",
             f"Generated from the repository: {len(facts.modules)} modules, {len(facts.settings)} settings, "
-            f"served by Caddy on port {facts.port}.",
+            f"served by nginx on port {facts.port}.",
         )
         doc.defs.append(
             f'<marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" '

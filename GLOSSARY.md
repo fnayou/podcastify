@@ -6,11 +6,11 @@
 - **GUID**: episode unique ID. Defaults to SHA-1(`<podcast_name>/<filename>`), `isPermaLink="false"`.
 - **`duration_hms`**: episode duration as `H:MM:SS` or `M:SS`, either set in YAML or read from the media file with `tinytag`.
 - **Duration cache**: persisted `tinytag` results at `<CACHE_ROOT>/.podcastify-cache.json` (`CACHE_ROOT` default `/app/.cache`), keyed by `(path, mtime)`. The file carries a format version; a cache in another version is ignored and every file is read again once.
-- **`SERVICE_PORT`**: in-container Caddy listen port (env var, default `8080`). Separate from `HOST_PORT` (host-side mapping).
+- **`SERVICE_PORT`**: in-container nginx listen port (env var, default `8080`). Separate from `HOST_PORT` (host-side mapping).
 - **`HOST_PORT`**: host port published to outside (compose only, default `8080`).
 - **`PUBLIC_BASE_URL`**: env var `PUBLIC_BASE_URL` (key); read into `Config.BASE_URL` (attribute). Embedded in RSS enclosure/image links. Default `http://localhost:8080`.
 - **`PUBLIC_ROOT` / `PODCASTS_ROOT`**: env-configured base dirs for media+feeds and YAML configs (defaults `/app/public`, `/app/podcasts`).
-- **`RUN_ON_START`**: if true, generator runs once at container boot before Caddy serves content.
+- **`RUN_ON_START`**: if true, generator runs once at container boot before nginx serves content.
 - **`PUBLISH_XML`**: if false, validates/discovers episodes but skips writing `<name>.xml` (dry run).
 - **`LOG_LEVEL`**: env var controlling logging verbosity (`DEBUG`, `INFO`, `WARNING`, `ERROR`). Default `INFO`. Used by stdlib `logging` module; controls what appears in `docker compose logs`.
 - **Channel fields / Episode fields**: the YAML keys the feed reads, declared as fields of `PodcastChannelModel` / `EpisodeModel` (`podcastify/parser.py`). Any other key is ignored with an "Unknown config key" warning.
